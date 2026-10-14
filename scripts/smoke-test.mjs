@@ -93,8 +93,11 @@ try {
   console.log('persistence OK');
 
   // Report GA4 page views for the initial load plus tab switches.
-  await page.goto(`${base}#rankings`, { waitUntil: 'networkidle' });
-  await page.reload({ waitUntil: 'networkidle' });
+  // gtag keeps retrying the aborted hits, so wait for 'load' rather than network idle.
+  await page.goto(`${base}#rankings`, { waitUntil: 'load' });
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForSelector('table tbody tr');
+  await page.waitForTimeout(3000);
   for (const tab of [/Roster/, 'Lineup', 'Trade Lab']) {
     await page.getByRole('tab', { name: tab }).click();
     await page.waitForTimeout(1500);
