@@ -47,8 +47,9 @@ console.log(`live data OK: ${live.games.length} games, ${live.teams.length} team
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 
-// Google Analytics: record each GA4 hit, then abort it so test runs never reach the
-// real property. Reported below for visibility; never fails the smoke test.
+// Google Analytics: record each GA4 hit and answer it locally with an empty success, so
+// test runs never reach the real property (an aborted hit would be retried by gtag and
+// show up twice). Reported below for visibility; never fails the smoke test.
 const gaHits = [];
 await page.route(/google-analytics\.com\/(g|[a-z]\/)?collect/, (route) => {
   const req = route.request();
@@ -59,7 +60,7 @@ await page.route(/google-analytics\.com\/(g|[a-z]\/)?collect/, (route) => {
     const params = new URLSearchParams(`${new URL(req.url()).search.slice(1)}&${line}`);
     gaHits.push({ en: params.getAll('en').at(-1), dl: params.get('dl'), dt: params.get('dt') });
   }
-  return route.abort();
+  return route.fulfill({ status: 204, body: '' });
 });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -93,7 +94,7 @@ try {
   console.log('persistence OK');
 
   // Report GA4 page views for the initial load plus tab switches.
-  // gtag keeps retrying the aborted hits, so wait for 'load' rather than network idle.
+  // gtag keeps a connection busy, so wait for 'load' rather than network idle.
   await page.goto(`${base}#rankings`, { waitUntil: 'load' });
   await page.reload({ waitUntil: 'load' });
   await page.waitForSelector('table tbody tr');
@@ -104,7 +105,7 @@ try {
   }
   await page.waitForTimeout(3000);
   const views = gaHits.filter((h) => h.en === 'page_view');
-  console.log(`analytics: ${gaHits.length} GA4 hits captured and blocked; page_view ${views.length}`);
+  console.log(`analytics: ${gaHits.length} GA4 hits captured (not sent to Google); page_view ${views.length}`);
   for (const v of views) console.log(`  page_view ${v.dl} | ${v.dt}`);
 } finally {
   await browser.close();
