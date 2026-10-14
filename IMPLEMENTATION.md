@@ -58,7 +58,8 @@ Fantasy hockey playoff optimizer: maximizes **usable player-games** (not points)
 ### Remaining / nice to have
 - [ ] Optional per-player manual team override (e.g. a trade announced between data refreshes)
 - [ ] UI component tests (the core logic is covered by unit tests; UI checked with a scripted Playwright walkthrough, see below)
-- [ ] Deployment target. The output is a static site (`dist/`); the data refresh commits to the repo, so a deploy must rebuild after each refresh.
+- [x] GitHub Pages deployment workflow (`deploy-pages.yml`): build → deploy → live smoke test; triggered by pushes to the default branch, manual dispatch, and the refresh workflow when the snapshot changes
+- [ ] **One-time owner action:** enable Pages (Settings → Pages → Source: GitHub Actions). The repo is private, so this needs a paid plan or a public repo.
 
 ## Test results (latest)
 - `npm test`: **55/55 passing**
@@ -82,7 +83,8 @@ Fantasy hockey playoff optimizer: maximizes **usable player-games** (not points)
 - ESPN gives no injury data, so the "injured only" IR rule relies on the user marking players injured (choosing IR does this, labeled as user-provided).
 - A trade's effective date is the first refresh that observes it (up to about 1 day late).
 - ESPN's pool contains a duplicate "Andrew Agozzino" (two ESPN ids, both minor-league). Both are shown; paste import flags the name as ambiguous.
-- The scheduled (cron) refresh runs only on the repository's default branch, which is currently this feature branch.
+- The scheduled (cron) refresh and Pages deploys run only on the repository's default branch, currently `claude/practical-faraday-ti8p02`. If a `main` branch becomes the default later, merge this branch into it first; the workflows need no changes.
+- `github.io` is not reachable from the dev container, so the live site is verified by the smoke-test job in GitHub Actions (`scripts/smoke-test.mjs`).
 
 ## Next step
-Choose a hosting target (e.g. Firebase Hosting or GitHub Pages) and add a deploy step that rebuilds after each data refresh.
+Enable GitHub Pages (Settings → Pages → Source: GitHub Actions), run “Deploy to GitHub Pages”, and confirm the smoke-test job passes against the live URL.

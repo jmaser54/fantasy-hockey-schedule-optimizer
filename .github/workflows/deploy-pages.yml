@@ -1,0 +1,95 @@
+name: Deploy to GitHub Pages
+
+# Builds the static app with the committed data snapshot, deploys it to
+# GitHub Pages, then smoke-tests the live site in a headless browser.
+#
+# Runs on pushes to the default branch, on demand, and from the data refresh
+# workflow whenever the daily snapshot changes (commits pushed with
+# GITHUB_TOKEN do not trigger push events, so the refresh calls this directly).
+on:
+  push:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      deploy: ${{ steps.gate.outputs.deploy }}
+    steps:
+      - name: Decide whether to deploy
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref_name }}
+        run: |
+          default=$(gh api "repos/$REPO" --jq .default_branch)
+          echo "default_branch=$default" >> "$GITHUB_OUTPUT"
+          if [ "$REF" != "$default" ]; then
+            echo "Not the default branch ($REF != $default); build only."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          elif ! gh api "repos/$REPO/pages" > /dev/null 2>&1; then
+            echo "::warning::GitHub Pages is not enabled for this repository. Enable it under Settings → Pages → Source: GitHub Actions, then re-run this workflow."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        with:
+          # Latest branch head, so a deploy started by the data refresh includes its new data commit.
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Validate bundled data
+        run: node --experimental-strip-types --no-warnings scripts/check-data.ts
+      - name: Build
+        run: BASE_PATH="/${GITHUB_REPOSITORY#*/}/" npx vite build
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.deploy == 'true'
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  smoke-test:
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install headless Chromium
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Test the live site
+        run: node scripts/smoke-test.mjs "${{ needs.deploy.outputs.page_url }}"

@@ -20,3 +20,15 @@ npm run build
 ## Data
 
 `public/data/schedule.json` and `public/data/players.json` are snapshots built by `npm run data:refresh` (NHL web API, plus ESPN fantasy eligibility). The GitHub Actions workflow `refresh-data.yml` runs the refresh daily, validates it, and commits it. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for sources, validation, assumptions, and status.
+
+## Deploy
+
+`.github/workflows/deploy-pages.yml` builds the app and publishes it to GitHub Pages at
+`https://<owner>.github.io/<repo>/`, then smoke-tests the live site in headless Chromium.
+It runs on every push to the default branch, on demand (Actions → Deploy to GitHub Pages → Run workflow),
+and automatically after the daily data refresh commits a new snapshot.
+
+One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions.**
+(GitHub Pages for a private repository requires a paid GitHub plan; on GitHub Free the repository must be public.
+The deployed site itself is public either way. It contains only the app and public NHL data; rosters stay in each visitor's browser.)
+Until Pages is enabled, the workflow builds and validates the app but skips deployment with a warning.
