@@ -1,0 +1,363 @@
+import { useMemo, useState } from 'react';
+import { playerGames } from '../domain/schedule.ts';
+import { matchName, parseRosterText, type MatchResult } from '../domain/rosterImport.ts';
+import { canUseIr, describeIssue, effectivePositions, validateRoster } from '../domain/roster.ts';
+import type { Player, Position, RosterEntry } from '../domain/types.ts';
+import { useApp } from './context.ts';
+import { PlayerSearch, PosBadges, PosToggles, isInactive, usePlayerIndex } from './common.tsx';
+
+interface ReviewLine {
+  raw: string;
+  name: string;
+  teamHint?: string;
+  result: MatchResult;
+  /** Chosen player id, or null to skip. */
+  choice: string | null;
+}
+
+export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
+  const { state, dispatch, resolve, toast } = useApp();
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [review, setReview] = useState<ReviewLine[] | null>(null);
+  const onRoster = useMemo(() => new Set(state.roster.map((e) => e.playerId)), [state.roster]);
+
+  const playersMap = useMemo(() => {
+    const m = new Map<string, Player>();
+    for (const e of state.roster) {
+      const p = resolve(e.playerId);
+      if (p) m.set(e.playerId, p);
+    }
+    return m;
+  }, [state.roster, resolve]);
+  const issues = validateRoster(state.roster, playersMap, state.league);
+  const active = state.roster.filter((e) => !e.onIr).length;
+  const ir = state.roster.length - active;
+
+  const add = (p: Player) => {
+    if (onRoster.has(p.id)) return toast(`${p.name} is already on your roster`);
+    dispatch({ type: 'addPlayers', ids: [p.id] });
+    toast(`Added ${p.name}`);
+  };
+
+  return (
+    <div className="stack">
+      <section className="panel">
+        <div className="panel-head">
+          <h2>Roster</h2>
+          <span className="counts">
+            <span>
+              Roster <b className={active > state.league.rosterSize ? 'over' : ''}>{active}</b>/{state.league.rosterSize}
+            </span>
+            <span>
+              IR <b className={ir > state.league.irSlots ? 'over' : ''}>{ir}</b>/{state.league.irSlots}
+            </span>
+          </span>
+          {state.roster.length > 0 && (
+            <button className="btn small" onClick={onGoLineup}>
+              View lineup →
+            </button>
+          )}
+        </div>
+        <div className="panel-body stack">
+          <div className="add-bar">
+            <PlayerSearch onPick={add} exclude={onRoster} autoFocus={state.roster.length === 0} placeholder="Add a player by name…" />
+            <button className="btn" onClick={() => setPasteOpen((o) => !o)} aria-expanded={pasteOpen}>
+              {pasteOpen ? 'Close paste' : 'Paste a list'}
+            </button>
+          </div>
+          {pasteOpen && !review && <PasteBox onParsed={setReview} />}
+          {review && (
+            <ImportReview
+              lines={review}
+              onChange={setReview}
+              onDone={(ids) => {
+                dispatch({ type: 'addPlayers', ids });
+                setReview(null);
+                setPasteOpen(false);
+                toast(`Added ${ids.length} player${ids.length === 1 ? '' : 's'}`);
+              }}
+              onCancel={() => setReview(null)}
+              onRoster={onRoster}
+            />
+          )}
+          {issues.length > 0 && (
+            <div className="notice" role="alert">
+              <b>Roster doesn’t fit your league settings</b>
+              <ul>
+                {issues.map((i, k) => (
+                  <li key={k}>{describeIssue(i)}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {state.roster.length === 0 ? (
+        <div className="panel empty">
+          <strong>No players yet</strong>
+          Search above, or paste your whole roster from your league site.
+        </div>
+      ) : (
+        <RosterTable />
+      )}
+    </div>
+  );
+}
+
+function PasteBox({ onParsed }: { onParsed: (lines: ReviewLine[]) => void }) {
+  const { data } = useApp();
+  const index = usePlayerIndex();
+  const [text, setText] = useState('');
+  const teamIds = useMemo(() => new Set(data.teams.map((t) => t.id)), [data.teams]);
+  const parse = () => {
+    const parsed = parseRosterText(text, teamIds);
+    onParsed(
+      parsed.map((l) => {
+        const result = matchName(l.name, index, l.teamHint);
+        return { ...l, result, choice: result.status === 'matched' ? result.player.id : null };
+      }),
+    );
+  };
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder={'Connor McDavid\nQuinn Hughes, VAN\nIgor Shesterkin\n…'}
+        aria-label="Paste player names"
+        autoFocus
+      />
+      <div>
+        <button className="btn primary" disabled={!text.trim()} onClick={parse}>
+          Match names
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ImportReview(props: {
+  lines: ReviewLine[];
+  onChange: (l: ReviewLine[]) => void;
+  onDone: (ids: string[]) => void;
+  onCancel: () => void;
+  onRoster: ReadonlySet<string>;
+}) {
+  const { teams, dispatch } = useApp();
+  const [creating, setCreating] = useState<number | null>(null);
+  const set = (i: number, choice: string | null) => props.onChange(props.lines.map((l, k) => (k === i ? { ...l, choice } : l)));
+  const chosen = [...new Set(props.lines.map((l) => l.choice).filter((c): c is string => !!c && !props.onRoster.has(c)))];
+  const counts = {
+    matched: props.lines.filter((l) => l.result.status === 'matched').length,
+    review: props.lines.filter((l) => l.result.status !== 'matched').length,
+  };
+  return (
+    <div className="panel" style={{ boxShadow: 'none' }}>
+      <div className="panel-head">
+        <h2>
+          {counts.matched} matched{counts.review ? ` · ${counts.review} need a look` : ''}
+        </h2>
+        <button className="btn ghost" onClick={props.onCancel}>
+          Back
+        </button>
+        <button className="btn primary" disabled={chosen.length === 0} onClick={() => props.onDone(chosen)}>
+          Add {chosen.length} player{chosen.length === 1 ? '' : 's'}
+        </button>
+      </div>
+      <div className="panel-body review">
+        {props.lines.map((l, i) => {
+          const r = l.result;
+          const candidates = r.status === 'ambiguous' || r.status === 'suggested' ? r.candidates : r.status === 'matched' ? [r.player] : [];
+          return (
+            <div key={i} className="review-row">
+              <span>{l.choice ? <span className="ok">✓</span> : r.status === 'unmatched' ? '✕' : '?'}</span>
+              <span className="raw" title={l.raw}>
+                {l.name}
+              </span>
+              <span className="opts">
+                {r.status === 'ambiguous' && <span className="small muted">Which one?</span>}
+                {r.status === 'suggested' && <span className="small muted">Did you mean</span>}
+                {r.status === 'unmatched' && <span className="small muted">No match</span>}
+                {candidates.map((c) => (
+                  <button key={c.id} className="opt" aria-pressed={l.choice === c.id} onClick={() => set(i, l.choice === c.id ? null : c.id)}>
+                    {c.name} · {c.team} · {c.positions.join('/')}
+                    {isInactive(c) ? ' · not on NHL roster' : ''}
+                    {props.onRoster.has(c.id) ? ' (on roster)' : ''}
+                  </button>
+                ))}
+                {r.status !== 'matched' && (
+                  <button className="opt" onClick={() => setCreating(creating === i ? null : i)}>
+                    Add as new player…
+                  </button>
+                )}
+              </span>
+              {creating === i && (
+                <div style={{ gridColumn: '2 / -1' }}>
+                  <CustomPlayerForm
+                    initialName={l.name}
+                    initialTeam={l.teamHint}
+                    teams={[...teams.values()]}
+                    onCreate={(p) => {
+                      dispatch({ type: 'addCustomPlayer', player: p });
+                      props.onChange(props.lines.map((x, k) => (k === i ? { ...x, choice: p.id, result: { status: 'matched', player: p } } : x)));
+                      setCreating(null);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CustomPlayerForm(props: { initialName: string; initialTeam?: string; teams: { id: string; name: string }[]; onCreate: (p: Player) => void }) {
+  const [name, setName] = useState(props.initialName);
+  const [team, setTeam] = useState(props.initialTeam ?? '');
+  const [positions, setPositions] = useState<Position[]>([]);
+  const ok = name.trim() && team && positions.length > 0;
+  return (
+    <div className="form-row" style={{ alignItems: 'end', padding: '8px 0' }}>
+      <div className="field">
+        <label>Name</label>
+        <input value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div className="field">
+        <label>NHL team</label>
+        <select value={team} onChange={(e) => setTeam(e.target.value)}>
+          <option value="">Choose…</option>
+          {props.teams.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="field">
+        <label>Eligible positions</label>
+        <PosToggles value={positions} onChange={setPositions} />
+      </div>
+      <div>
+        <button
+          className="btn primary small"
+          disabled={!ok}
+          onClick={() => props.onCreate({ id: `custom-${Date.now().toString(36)}`, name: name.trim(), team, positions, eligibilitySource: 'user' })}
+        >
+          Create
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function RosterTable() {
+  const { state, dispatch, resolve, selected, data, teams } = useApp();
+  const rows = state.roster.map((e) => ({ e, p: resolve(e.playerId) }));
+  const order = (r: { e: RosterEntry; p?: Player }) => (r.e.onIr ? 2 : r.p && effectivePositions(r.e, r.p).every((x) => x === 'G') ? 1 : 0);
+  rows.sort((a, b) => order(a) - order(b));
+  const dates = new Set(selected.dates);
+  return (
+    <section className="panel">
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Player</th>
+              <th>Team</th>
+              <th title="Fantasy positions this player can fill">Eligible</th>
+              <th className="n" title={`NHL games in ${selected.name}`}>
+                Games
+              </th>
+              <th>Status</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ e, p }) => {
+              if (!p) {
+                return (
+                  <tr key={e.playerId}>
+                    <td colSpan={5}>
+                      <span className="badge bad">Missing from player data</span> <span className="muted small">{e.playerId}</span>
+                    </td>
+                    <td>
+                      <button className="icon-btn" onClick={() => dispatch({ type: 'removePlayer', id: e.playerId })} aria-label="Remove">
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                );
+              }
+              const pos = effectivePositions(e, p);
+              const games = playerGames(data.schedule, p, selected.start, selected.end).filter((g) => dates.has(g.date)).length;
+              const irAllowed = canUseIr(e, p, state.league);
+              return (
+                <tr key={e.playerId}>
+                  <td>
+                    {p.name} {isInactive(p) && <span className="badge warn" title="Not on an NHL active roster at the last data refresh (e.g. in the minors). Their team's games are still counted.">Not on NHL roster</span>}
+                    {p.stints && p.stints.length > 1 && (
+                      <span className="badge" title={p.stints.map((s) => `${s.team}${s.from ? ` from ${s.from}` : ''}${s.to ? ` to ${s.to}` : ''}`).join('; ')}>
+                        Traded
+                      </span>
+                    )}
+                  </td>
+                  <td title={teams.get(p.team)?.name}>{p.team}</td>
+                  <td>
+                    <PosToggles
+                      value={pos}
+                      onChange={(v) => dispatch({ type: 'updateEntry', id: e.playerId, patch: { positionsOverride: sameSet(v, p.positions) ? undefined : v } })}
+                    />{' '}
+                    {e.positionsOverride ? (
+                      <button className="btn ghost small" onClick={() => dispatch({ type: 'updateEntry', id: e.playerId, patch: { positionsOverride: undefined } })} title={`Data: ${p.positions.join('/')}`}>
+                        reset
+                      </button>
+                    ) : (
+                      <span className="small muted" title={p.eligibilitySource === 'espn' ? 'ESPN fantasy eligibility' : p.eligibilitySource === 'nhl' ? 'NHL listed position' : 'Entered by you'}>
+                        {p.eligibilitySource === 'espn' ? 'ESPN' : p.eligibilitySource === 'nhl' ? 'NHL' : 'you'}
+                      </span>
+                    )}
+                  </td>
+                  <td className="n">{games}</td>
+                  <td>
+                    <select
+                      value={e.onIr ? 'ir' : 'active'}
+                      aria-label={`${p.name} status`}
+                      onChange={(ev) => {
+                        const toIr = ev.target.value === 'ir';
+                        // Under an injured-only IR rule, choosing IR records that you consider the player injured.
+                        dispatch({ type: 'updateEntry', id: e.playerId, patch: { onIr: toIr, ...(toIr && !irAllowed ? { markedInjured: true } : {}) } });
+                      }}
+                    >
+                      <option value="active">Active</option>
+                      <option value="ir">{state.league.irEligibility === 'injured' && !irAllowed ? 'IR (mark injured)' : 'IR'}</option>
+                    </select>
+                    {e.markedInjured && (
+                      <button className="btn ghost small" title="You marked this player injured" onClick={() => dispatch({ type: 'updateEntry', id: e.playerId, patch: { markedInjured: false } })}>
+                        injured ✕
+                      </button>
+                    )}
+                  </td>
+                  <td>
+                    <button className="icon-btn" onClick={() => dispatch({ type: 'removePlayer', id: e.playerId })} aria-label={`Remove ${p.name}`} title="Remove">
+                      ✕
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="panel-body small muted" style={{ borderTop: '1px solid var(--border)' }}>
+        <PosBadges positions={['C', 'LW', 'RW', 'D', 'G']} /> toggles change eligibility for your league. IR players don’t count toward the roster limit and never play.
+      </div>
+    </section>
+  );
+}
+
+function sameSet(a: readonly string[], b: readonly string[]) {
+  return a.length === b.length && a.every((x) => b.includes(x));
+}

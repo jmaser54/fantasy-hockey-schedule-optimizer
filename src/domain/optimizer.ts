@@ -247,11 +247,31 @@ export function optimizeRange(
 ): RangeResult {
   const seats = expandSeats(league.slots);
   const days = eachDate(start, end).map((d) => optimizeDay(d, roster, seats, schedule, manualByDate[d]));
+  return summarize(days, roster, start, end);
+}
+
+/** Optimize a set of dates (each once), e.g. the union of all playoff rounds. */
+export function optimizeDates(
+  dates: Iterable<ISODate>,
+  roster: readonly LineupPlayer[],
+  league: Pick<LeagueConfig, 'slots'>,
+  schedule: ScheduleIndex,
+  manualByDate: Record<ISODate, ManualLineup> = {},
+): Map<ISODate, DayResult> {
+  const seats = expandSeats(league.slots);
+  const out = new Map<ISODate, DayResult>();
+  for (const d of dates) if (!out.has(d)) out.set(d, optimizeDay(d, roster, seats, schedule, manualByDate[d]));
+  return out;
+}
+
+/** Aggregate daily results. Each date contributes once. */
+export function summarize(days: readonly DayResult[], roster: readonly LineupPlayer[], start: ISODate, end: ISODate): RangeResult {
   const totals = new Map<string, PlayerTotals>(roster.map((p) => [p.id, { playerId: p.id, scheduled: 0, usable: 0 }]));
   for (const day of days) {
     for (const st of day.players) {
       if (!st.game) continue;
-      const t = totals.get(st.playerId)!;
+      const t = totals.get(st.playerId);
+      if (!t) continue;
       t.scheduled++;
       if (st.seatKey) t.usable++;
     }
@@ -259,7 +279,7 @@ export function optimizeRange(
   return {
     start,
     end,
-    days,
+    days: [...days],
     scheduled: days.reduce((n, d) => n + d.scheduled, 0),
     usable: days.reduce((n, d) => n + d.usable, 0),
     goalieUsable: days.reduce((n, d) => n + d.goalieUsable, 0),
