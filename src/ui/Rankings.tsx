@@ -21,7 +21,11 @@ export function RankingsView() {
   // Columns: each round, the full playoffs, and the custom range when it is selected.
   const cols = windows.filter((w) => w.id !== 'custom' || selected.id === 'custom');
   const rankings = useMemo(() => rankTeams(data.schedule, teamIds, cols.map((w) => ({ start: w.start, end: w.end }))), [data.schedule, teamIds, cols]);
-  const light = useMemo(() => rankTeams(data.schedule, teamIds, [{ start: selected.start, end: selected.end }]), [data.schedule, teamIds, selected]);
+  // Light-night games over exactly the selected dates (for "Full playoffs", the union of the rounds).
+  const light = useMemo(
+    () => rankTeams(data.schedule, teamIds, selected.id === 'all' ? state.periods : [{ start: selected.start, end: selected.end }]),
+    [data.schedule, teamIds, selected, state.periods],
+  );
   const lightBy = new Map(light.map((r) => [r.team, r.lightNight]));
   // "Full playoffs" spans the rounds' dates only; count its games over those dates.
   const fullIdx = cols.findIndex((w) => w.id === 'all');
