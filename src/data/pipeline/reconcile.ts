@@ -18,6 +18,12 @@ export interface ReconcileResult {
   warnings: string[];
 }
 
+/** First and last name only, so "Elias N. Pettersson" ~ "Elias Pettersson". */
+function looseKey(name: string): string {
+  const parts = normalizeName(name).split(' ');
+  return parts.length > 2 ? `${parts[0]} ${parts[parts.length - 1]}` : parts.join(' ');
+}
+
 function dedupeNhl(players: NhlRosterPlayer[], warnings: string[]): NhlRosterPlayer[] {
   const byId = new Map<number, NhlRosterPlayer>();
   for (const p of players) {
@@ -60,9 +66,11 @@ export function reconcilePlayers(input: {
   const warnings: string[] = [];
   const nhl = dedupeNhl(input.nhl, warnings);
   const nhlByName = new Map<string, NhlRosterPlayer[]>();
+  const nhlByLoose = new Map<string, NhlRosterPlayer[]>();
   for (const p of nhl) {
     const k = normalizeName(p.name);
     nhlByName.set(k, [...(nhlByName.get(k) ?? []), p]);
+    nhlByLoose.set(looseKey(p.name), [...(nhlByLoose.get(looseKey(p.name)) ?? []), p]);
   }
 
   const espnFor = new Map<number, EspnPlayer>(); // nhlId → espn
@@ -73,26 +81,50 @@ export function reconcilePlayers(input: {
 
   if (input.espn && input.espn.length > 0) {
     try {
-      // Pass 1: unique name matches.
-      const unique: { espn: EspnPlayer; nhl: NhlRosterPlayer }[] = [];
+      // Pass 1: names that identify exactly one NHL player. Used to learn
+      // ESPN's team ids and slot ids before resolving anything ambiguous.
+      const firstPass: { espn: EspnPlayer; nhl: NhlRosterPlayer }[] = [];
       const pending: EspnPlayer[] = [];
       for (const e of input.espn) {
         const c = nhlByName.get(normalizeName(e.name)) ?? [];
-        if (c.length === 1) unique.push({ espn: e, nhl: c[0]! });
+        if (c.length === 1) firstPass.push({ espn: e, nhl: c[0]! });
         else pending.push(e);
       }
-      proTeams = inferProTeams(unique, report);
+      proTeams = inferProTeams(firstPass, report);
       report.push(`ESPN proTeamIds mapped: ${proTeams.size}`);
-      // Pass 2: same-name players disambiguated by team.
-      const used = new Set<number>(unique.map((u) => u.nhl.nhlId));
-      const pairs = [...unique];
+      // Several ESPN entries pointing at one NHL player (e.g. a same-named
+      // prospect): keep the one on the same team; the rest become pending.
+      const byNhl = new Map<number, { espn: EspnPlayer; nhl: NhlRosterPlayer }[]>();
+      for (const pr of firstPass) byNhl.set(pr.nhl.nhlId, [...(byNhl.get(pr.nhl.nhlId) ?? []), pr]);
+      const pairs: { espn: EspnPlayer; nhl: NhlRosterPlayer }[] = [];
+      for (const group of byNhl.values()) {
+        if (group.length === 1) {
+          pairs.push(group[0]!);
+          continue;
+        }
+        const same = group.filter((g) => proTeams.get(g.espn.proTeamId) === g.nhl.team);
+        if (same.length === 1) pairs.push(same[0]!);
+        for (const g of group) if (g !== same[0] || same.length !== 1) pending.push(g.espn);
+      }
+      const inference = inferSlotMapping(pairs.map(({ espn, nhl: n }) => ({ espn, nhlPosition: NHL_POSITION_TO_FANTASY[n.positionCode] })));
+      report.push(...inference.report);
+      slotPosition = inference.slotPosition;
+
+      // Pass 2: resolve the rest by name (ignoring middle initials), team and position.
+      const used = new Set<number>(pairs.map((u) => u.nhl.nhlId));
       for (const e of pending) {
-        const c = (nhlByName.get(normalizeName(e.name)) ?? []).filter((p) => p.team === proTeams.get(e.proTeamId) && !used.has(p.nhlId));
+        const key = looseKey(e.name);
+        const team = proTeams.get(e.proTeamId);
+        const sameName = nhlByLoose.get(key) ?? [];
+        const pos = espnPositions(e, slotPosition);
+        const c = sameName.filter((p) => p.team === team && !used.has(p.nhlId) && pos.includes(NHL_POSITION_TO_FANTASY[p.positionCode]));
         if (c.length === 1) {
           pairs.push({ espn: e, nhl: c[0]! });
           used.add(c[0]!.nhlId);
+        } else if (sameName.some((p) => p.team === team)) {
+          // Same name on the same NHL team but not resolvable: never create a second record.
+          warnings.push(`ESPN ${e.name} (${e.espnId}) could not be matched to one ${team} player; ignored.`);
         } else {
-          if ((nhlByName.get(normalizeName(e.name)) ?? []).length > 1) warnings.push(`ESPN ${e.name} (${e.espnId}) matches several NHL players; left unmerged.`);
           espnOnly.push(e);
         }
       }
@@ -107,9 +139,6 @@ export function reconcilePlayers(input: {
       }
       if (teamConflicts > 15) warnings.push(`…and ${teamConflicts - 15} more ESPN/NHL team conflicts.`);
 
-      const inference = inferSlotMapping(pairs.map(({ espn, nhl: n }) => ({ espn, nhlPosition: NHL_POSITION_TO_FANTASY[n.positionCode] })));
-      report.push(...inference.report);
-      slotPosition = inference.slotPosition;
       for (const { espn, nhl: n } of pairs) espnFor.set(n.nhlId, espn);
       eligibility = { source: 'espn', detail: `ESPN fantasy eligibility for ${pairs.length} players; NHL positions for the rest` };
       report.push(`ESPN matched ${pairs.length}/${input.espn.length}; ESPN-only ${espnOnly.length}; NHL-only ${nhl.length - pairs.length}`);
@@ -188,7 +217,12 @@ export function applyHistory(players: DirPlayer[], previous: PlayersFile | undef
     }
     if (stints.length > 0) p.stints = stints;
   }
-  const kept = previous.players.filter((p) => !consumed.has(p.id)).map((p) => ({ ...p, inactive: true }));
+  // Keep players who vanished, unless their NHL/ESPN id now belongs to a current record.
+  const liveNhl = new Set(players.map((p) => p.nhlId).filter((x) => x !== undefined));
+  const liveEspn = new Set(players.map((p) => p.espnId).filter((x) => x !== undefined));
+  const kept = previous.players
+    .filter((p) => !consumed.has(p.id) && !(p.nhlId !== undefined && liveNhl.has(p.nhlId)) && !(p.espnId !== undefined && liveEspn.has(p.espnId)))
+    .map((p) => ({ ...p, inactive: true }));
   players.push(...kept);
   report.push(`team changes: ${moves}; carried forward (not on any current roster): ${kept.length}`);
 }

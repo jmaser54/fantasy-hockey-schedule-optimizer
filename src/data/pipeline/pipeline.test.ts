@@ -162,18 +162,44 @@ describe('ESPN reconciliation', () => {
     expect(res.players.find((p) => p.nhlId === nhl[0]!.nhlId)!.positions).toEqual(['C']);
   });
 
-  it('never merges two same-name players without a team to separate them', () => {
+  it('separates same-name teammates by position, even with a middle initial', () => {
     const { nhl, espn } = synthetic();
-    // Two NHL players named "Elias Pettersson" on different teams; ESPN knows both.
+    // Real case: two "Elias Pettersson"s on VAN (C and D); ESPN lists the D as "Elias N. Pettersson".
     nhl.push({ nhlId: 1, name: 'Elias Pettersson', team: 'AAA', positionCode: 'C' });
-    nhl.push({ nhlId: 2, name: 'Elias Pettersson', team: 'BBB', positionCode: 'D' });
+    nhl.push({ nhlId: 2, name: 'Elias Pettersson', team: 'AAA', positionCode: 'D' });
     espn.push({ espnId: 11, name: 'Elias Pettersson', proTeamId: 1, defaultPositionId: 1, eligibleSlots: [0, 3, 6, 7, 8] });
-    espn.push({ espnId: 12, name: 'Elias Pettersson', proTeamId: 2, defaultPositionId: 4, eligibleSlots: [4, 6, 7, 8] });
+    espn.push({ espnId: 12, name: 'Elias N. Pettersson', proTeamId: 1, defaultPositionId: 4, eligibleSlots: [4, 6, 7, 8] });
     const res = reconcilePlayers({ nhl, espn, today: '2027-03-01' });
-    const ep = res.players.filter((p) => p.name === 'Elias Pettersson');
-    expect(ep.map((p) => [p.nhlId, p.espnId, p.positions])).toEqual([
-      [1, 11, ['C']],
-      [2, 12, ['D']],
+    const ep = res.players.filter((p) => p.name.includes('Pettersson'));
+    expect(ep.map((p) => [p.id, p.espnId, p.positions])).toEqual([
+      ['nhl-1', 11, ['C']],
+      ['nhl-2', 12, ['D']],
+    ]);
+  });
+
+  it('never creates a duplicate record when same-name teammates cannot be resolved', () => {
+    const { nhl, espn } = synthetic();
+    nhl.push({ nhlId: 1, name: 'Sam Twin', team: 'AAA', positionCode: 'C' });
+    nhl.push({ nhlId: 2, name: 'Sam Twin', team: 'AAA', positionCode: 'C' });
+    espn.push({ espnId: 11, name: 'Sam Twin', proTeamId: 1, defaultPositionId: 1, eligibleSlots: [0, 3, 6, 7, 8] });
+    const res = reconcilePlayers({ nhl, espn, today: '2027-03-01' });
+    expect(res.players.filter((p) => p.name === 'Sam Twin').map((p) => [p.id, p.eligibilitySource])).toEqual([
+      ['nhl-1', 'nhl'],
+      ['nhl-2', 'nhl'],
+    ]);
+    expect(res.warnings.some((w) => w.includes('Sam Twin'))).toBe(true);
+  });
+
+  it('a same-named prospect on another team does not steal the NHL player match', () => {
+    const { nhl, espn } = synthetic();
+    nhl.push({ nhlId: 1, name: 'Joe Common', team: 'AAA', positionCode: 'D' });
+    espn.push({ espnId: 21, name: 'Joe Common', proTeamId: 2, defaultPositionId: 1, eligibleSlots: [0, 3, 6, 7, 8] }); // prospect, BBB
+    espn.push({ espnId: 22, name: 'Joe Common', proTeamId: 1, defaultPositionId: 4, eligibleSlots: [4, 6, 7, 8] });
+    const res = reconcilePlayers({ nhl, espn, today: '2027-03-01' });
+    const jc = res.players.filter((p) => p.name === 'Joe Common');
+    expect(jc.map((p) => [p.id, p.team, p.positions])).toEqual([
+      ['espn-21', 'BBB', ['C']],
+      ['nhl-1', 'AAA', ['D']],
     ]);
   });
 
@@ -206,6 +232,14 @@ describe('team history across refreshes', () => {
     const later: PlayersFile['players'] = [{ ...now[0]!, stints: undefined }];
     applyHistory(later, { ...prevFile('BBB'), players: [now[0]!] }, '2027-03-10', []);
     expect(later[0]!.stints).toEqual(now[0]!.stints);
+  });
+
+  it('does not resurrect an old record whose ids now belong to a current player', () => {
+    const prev = prevFile('AAA');
+    prev.players.push({ id: 'espn-55', name: 'Dup', team: 'AAA', positions: ['D'], eligibilitySource: 'espn', espnId: 55, inactive: true });
+    const now: PlayersFile['players'] = [{ id: 'nhl-7', name: 'Traded Guy', team: 'AAA', positions: ['C'], eligibilitySource: 'espn', nhlId: 7 }, { id: 'nhl-9', name: 'Dup', team: 'AAA', positions: ['D'], eligibilitySource: 'espn', nhlId: 9, espnId: 55 }];
+    applyHistory(now, prev, '2027-03-05', []);
+    expect(now.map((p) => p.id)).toEqual(['nhl-7', 'nhl-9']);
   });
 
   it('keeps players who left every roster, flagged inactive', () => {

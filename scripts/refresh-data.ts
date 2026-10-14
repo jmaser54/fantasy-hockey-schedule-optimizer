@@ -121,6 +121,12 @@ async function main() {
       await saveRaw('espn-players-sample.json', Array.isArray(body) ? body.slice(0, 25) : body);
       espn = parseEspnPlayers(body);
       log(`ESPN players: ${espn.length}`);
+      if (Array.isArray(body)) {
+        const keys = new Set<string>();
+        for (const p of body.slice(0, 200)) if (p && typeof p === 'object') Object.keys(p).forEach((k) => keys.add(k));
+        log(`  ESPN fields: ${[...keys].sort().join(' ')}`);
+        log(`  ESPN injury statuses: ${JSON.stringify(espn.reduce<Record<string, number>>((a, p) => ((a[p.injuryStatus ?? 'none'] = (a[p.injuryStatus ?? 'none'] ?? 0) + 1), a), {}))}`);
+      }
     } catch (err) {
       log(`ESPN unavailable: ${(err as Error).message}`);
     }
