@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { trackTabView } from '../analytics.ts';
 import { buildPlayerLookup, isStale, loadDataset, type DataStatus } from '../data/load.ts';
 import { dayCount, eachDate, formatRange, formatShort, isValidISODate } from '../domain/dates.ts';
 import { optimizeDates, summarize, type DayResult, type LineupPlayer } from '../domain/optimizer.ts';
@@ -43,6 +44,14 @@ export function App() {
   useEffect(() => {
     setSaveFailed(!saveToStorage(state));
   }, [state]);
+
+  // GA4: the Google tag counts the initial load; count each later tab change once.
+  const trackedTab = useRef(tab);
+  useEffect(() => {
+    if (tab === trackedTab.current) return;
+    trackedTab.current = tab;
+    trackTabView(TABS.find((t) => t.id === tab)!.label);
+  }, [tab]);
 
   useEffect(() => {
     const onHash = () => setTab(tabFromHash());

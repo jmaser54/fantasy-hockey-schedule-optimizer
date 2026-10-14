@@ -57,7 +57,7 @@ await page.route(/google-analytics\.com\/(g|[a-z]\/)?collect/, (route) => {
   const lines = body ? body.split('\n').filter(Boolean) : [''];
   for (const line of lines) {
     const params = new URLSearchParams(`${new URL(req.url()).search.slice(1)}&${line}`);
-    gaHits.push({ en: params.getAll('en').at(-1), dl: params.get('dl') });
+    gaHits.push({ en: params.getAll('en').at(-1), dl: params.get('dl'), dt: params.get('dt') });
   }
   return route.abort();
 });
@@ -105,7 +105,7 @@ try {
   await page.waitForTimeout(3000);
   const views = gaHits.filter((h) => h.en === 'page_view');
   console.log(`analytics: ${gaHits.length} GA4 hits captured and blocked; page_view ${views.length}`);
-  for (const v of views) console.log(`  page_view ${v.dl}`);
+  for (const v of views) console.log(`  page_view ${v.dl} | ${v.dt}`);
 } finally {
   await browser.close();
 }
