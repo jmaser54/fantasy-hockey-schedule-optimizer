@@ -1,5 +1,7 @@
 # Playoff Schedule Optimizer
 
+**Live app:** https://jmaser54.github.io/fantasy-hockey-schedule-optimizer/
+
 A fantasy hockey tool that finds the lineups that maximize **usable player-games** across your league's fantasy playoff rounds. It uses real NHL schedules, your league's daily lineup slots, and position eligibility.
 
 - **Team schedules:** NHL team games per round and across the full playoffs.

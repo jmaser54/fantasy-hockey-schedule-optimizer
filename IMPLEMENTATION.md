@@ -59,7 +59,7 @@ Fantasy hockey playoff optimizer: maximizes **usable player-games** (not points)
 - [ ] Optional per-player manual team override (e.g. a trade announced between data refreshes)
 - [ ] UI component tests (the core logic is covered by unit tests; UI checked with a scripted Playwright walkthrough, see below)
 - [x] GitHub Pages deployment workflow (`deploy-pages.yml`): build → deploy → live smoke test; triggered by pushes to the default branch, manual dispatch, and the refresh workflow when the snapshot changes
-- [ ] **One-time owner action:** enable Pages (Settings → Pages → Source: GitHub Actions). The repo is private, so this needs a paid plan or a public repo.
+- [x] Pages enabled (repo made public). **Live: https://jmaser54.github.io/fantasy-hockey-schedule-optimizer/**. First deploy (run 38635409510, 2026-10-14) passed its smoke test against the live URL: data snapshot matched the commit (1,344 games, 32 teams), rankings rendered 32 teams, lineup computed, roster persisted across reload, no browser errors.
 
 ## Test results (latest)
 - `npm test`: **55/55 passing**
@@ -84,7 +84,8 @@ Fantasy hockey playoff optimizer: maximizes **usable player-games** (not points)
 - A trade's effective date is the first refresh that observes it (up to about 1 day late).
 - ESPN's pool contains a duplicate "Andrew Agozzino" (two ESPN ids, both minor-league). Both are shown; paste import flags the name as ambiguous.
 - The scheduled (cron) refresh and Pages deploys run only on the repository's default branch, currently `claude/practical-faraday-ti8p02`. If a `main` branch becomes the default later, merge this branch into it first; the workflows need no changes.
-- `github.io` is not reachable from the dev container, so the live site is verified by the smoke-test job in GitHub Actions (`scripts/smoke-test.mjs`).
+- `github.io` is not reachable from the dev container, so the live site is verified by the smoke-test job in GitHub Actions (`scripts/smoke-test.mjs`), which runs after every deploy.
+- GitHub Actions warns that `actions/checkout@v4` / `setup-node@v4` target the deprecated Node 20 runtime (they still run, forced to Node 24). Not failing; bump action versions when newer majors are adopted.
 
 ## Next step
-Enable GitHub Pages (Settings → Pages → Source: GitHub Actions), run “Deploy to GitHub Pages”, and confirm the smoke-test job passes against the live URL.
+Watch the first scheduled refresh (daily at 10:17 UTC). It should commit a new snapshot and trigger deploy → smoke test automatically. If a run fails, the Actions tab shows which stage failed (fetch/validation, build, deploy or live smoke test).
