@@ -52,3 +52,16 @@ export function dailyGroupCounts(day: DayResult, roster: readonly LineupPlayer[]
   const cap = groupCapacity(slots);
   return { skaters: { available: skaters, capacity: cap.skaters }, goalies: { available: goalies, capacity: cap.goalies } };
 }
+
+/** Sum daily counts over a set of days (e.g. a playoff round): total opportunities vs total slot-days. */
+export function sumGroupCounts(days: readonly DayResult[], roster: readonly LineupPlayer[], slots: readonly LineupSlot[]): DailyGroupCounts {
+  const total: DailyGroupCounts = { skaters: { available: 0, capacity: 0 }, goalies: { available: 0, capacity: 0 } };
+  for (const day of days) {
+    const c = dailyGroupCounts(day, roster, slots);
+    total.skaters.available += c.skaters.available;
+    total.skaters.capacity += c.skaters.capacity;
+    total.goalies.available += c.goalies.available;
+    total.goalies.capacity += c.goalies.capacity;
+  }
+  return total;
+}

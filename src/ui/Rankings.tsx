@@ -73,12 +73,12 @@ export function RankingsView() {
 
   return (
     <div className="stack">
-      <section className="panel chart-panel">
+      <section className="panel">
         <div className="panel-head">
           <h2>Games per night</h2>
           <span className="legend">
             <span>
-              <i style={{ background: 'var(--green)' }} />
+              <i style={{ background: 'var(--good)' }} />
               Light night: 8 or fewer games ({lightCount} in range)
             </span>
           </span>

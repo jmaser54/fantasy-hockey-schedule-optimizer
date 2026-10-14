@@ -68,7 +68,7 @@ export function App() {
         <div className="topbar-inner">
           <div className="brand-row">
             <div className="brand">
-              Playoff <span>Schedule</span> Optimizer
+              Playoff <span>Planner</span>
             </div>
             <button className="settings-btn" onClick={() => setSettingsOpen(true)} aria-label="League settings" title="Review and adjust your league settings">
               <span aria-hidden="true">⚙︎</span> League settings

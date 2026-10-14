@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { dailyGroupCounts, groupCapacity } from './capacity.ts';
+import { dailyGroupCounts, groupCapacity, sumGroupCounts } from './capacity.ts';
 import { DEFAULT_SLOTS } from './league.ts';
-import { expandSeats, optimizeDay } from './optimizer.ts';
+import { expandSeats, optimizeDay, optimizeRange } from './optimizer.ts';
 import { player, sched, slots } from './testUtils.ts';
 
 describe('lineup capacity counts', () => {
@@ -39,5 +39,24 @@ describe('lineup capacity counts', () => {
     const day = optimizeDay('2027-03-01', roster, expandSeats(lineup), s);
     expect(dailyGroupCounts(day, roster, lineup).skaters).toEqual({ available: 3, capacity: 1 });
     expect(day.usable).toBe(1);
+  });
+
+  it('sums goalie opportunities and slot-days over a round without changing usable games', () => {
+    // Three goalies; Mon: 3 teams play (3/2), Tue: 1 plays (1/2), Wed: none (0/2).
+    const s = sched([
+      ['2027-03-01', 'AAA', 'BBB'],
+      ['2027-03-01', 'CCC', 'DDD'],
+      ['2027-03-02', 'AAA', 'EEE'],
+    ]);
+    const roster = [player('g1', 'AAA', ['G']), player('g2', 'BBB', ['G']), player('g3', 'CCC', ['G'])];
+    const lineup = slots({ G: [2, ['G']] });
+    const r = optimizeRange('2027-03-01', '2027-03-03', roster, { slots: lineup }, s);
+    expect(r.days.map((d) => dailyGroupCounts(d, roster, lineup).goalies)).toEqual([
+      { available: 3, capacity: 2 },
+      { available: 1, capacity: 2 },
+      { available: 0, capacity: 2 },
+    ]);
+    expect(sumGroupCounts(r.days, roster, lineup).goalies).toEqual({ available: 4, capacity: 6 });
+    expect(r.usable).toBe(3); // 2 on Mon (one surplus) + 1 on Tue
   });
 });
