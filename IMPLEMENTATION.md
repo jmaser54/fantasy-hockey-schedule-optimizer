@@ -62,7 +62,7 @@ Fantasy hockey playoff optimizer: maximizes **usable player-games** (not points)
 - [x] Pages enabled (repo made public). **Live: https://jmaser54.github.io/fantasy-hockey-schedule-optimizer/**. First deploy (run 38635409510, 2026-10-14) passed its smoke test against the live URL: data snapshot matched the commit (1,344 games, 32 teams), rankings rendered 32 teams, lineup computed, roster persisted across reload, no browser errors.
 
 ## Test results (latest)
-- `npm test`: **58/58 passing** (adds 3 for the lineup grid's daily skater/goalie opportunity vs capacity counts, `src/domain/capacity.ts`)
+- `npm test`: **66/66 passing** (includes lineup capacity counts, `src/domain/capacity.ts`, and Team Schedules sorting/round filtering/matchups/roster-by-team, `src/domain/teamSchedules.ts`)
   - optimizer, spec cases 1–10, plus 500 random instances checked against brute force: 13
   - dates, roster/IR, rankings: 12
   - name matching and paste parsing: 7

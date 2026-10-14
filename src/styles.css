@@ -162,6 +162,30 @@ th.col-selected { box-shadow: inset 0 -2px 0 var(--accent); }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); align-items: center; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
 
+/* Team schedules: view toggle, bar matchups, your-players button, schedule grid */
+.view-toggle { justify-self: start; }
+.strip button.bar-col { border: 0; background: none; padding: 0; cursor: pointer; border-radius: 3px; }
+.strip button.bar-col:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.strip .bar-col.active .bar { outline: 2px solid var(--text); outline-offset: 1px; }
+.strip .bar-col.active .lbl { color: var(--text); font-weight: 700; }
+.night-detail { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 28px; margin-top: 6px; font-size: 12px; }
+.mine-btn { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 1px 9px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mine-btn:hover, .mine-btn[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); }
+.summary-col { color: var(--muted); border-left: 1px dashed var(--border); }
+.team-players { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.team-player { white-space: nowrap; }
+.sgrid { border-collapse: separate; border-spacing: 0; font-size: 11px; }
+.sgrid th, .sgrid td { padding: 0; text-align: center; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.sgrid .sticky { position: sticky; left: 0; z-index: 1; background: var(--surface); text-align: left; padding: 4px 10px; min-width: 70px; border-right: 1px solid var(--border); font-size: 12px; }
+.sgrid tbody .sticky { font-weight: 700; color: var(--text); }
+.sgrid .dcol { padding: 4px 2px; font-size: 10px; line-height: 1.25; min-width: 42px; }
+.sgrid td.game, .sgrid td.off { min-width: 42px; height: 26px; }
+.sgrid td.game { background: var(--surface-2); font-weight: 600; color: var(--text); }
+.sgrid .wk { border-left: 1px solid var(--border); }
+.sgrid .col-hl { box-shadow: inset 1px 0 0 var(--accent), inset -1px 0 0 var(--accent); }
+.sgrid td.n, .sgrid th.n { padding: 4px 10px; text-align: right; font-size: 12px; }
+.sgrid tbody tr:hover td, .sgrid tbody tr:hover th { box-shadow: inset 0 1px 0 var(--accent), inset 0 -1px 0 var(--accent); }
+
 /* Badges */
 .pos { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: var(--surface-2); color: var(--muted); margin-right: 3px; }
 .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
