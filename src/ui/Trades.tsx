@@ -91,7 +91,6 @@ export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
                 <th className="n">Current</th>
                 <th className="n">Proposed</th>
                 <th className="n">Change</th>
-                <th className="n">Scheduled games (current → proposed)</th>
               </tr>
             </thead>
             <tbody>
@@ -102,9 +101,6 @@ export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
                   <td className="n">{after.usable}</td>
                   <td className="n">
                     <Delta value={after.usable - before.usable} />
-                  </td>
-                  <td className="n muted">
-                    {before.scheduled} → {after.scheduled}
                   </td>
                 </tr>
               ))}

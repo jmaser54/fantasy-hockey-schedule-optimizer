@@ -105,6 +105,6 @@ export function isInactive(p: Player | undefined): boolean {
 }
 
 export function Delta({ value }: { value: number }) {
-  if (value === 0) return <span className="muted">±0</span>;
+  if (value === 0) return <span className="muted">+0</span>;
   return <span className={value > 0 ? 'delta-pos' : 'delta-neg'}>{value > 0 ? `+${value}` : `−${-value}`}</span>;
 }
