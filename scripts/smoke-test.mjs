@@ -58,14 +58,16 @@ await page.route(/google-analytics\.com\/(g|[a-z]\/)?collect/, (route) => {
   const lines = body ? body.split('\n').filter(Boolean) : [''];
   for (const line of lines) {
     const params = new URLSearchParams(`${new URL(req.url()).search.slice(1)}&${line}`);
-    gaHits.push({ en: params.getAll('en').at(-1), dl: params.get('dl'), dt: params.get('dt') });
+    // Per-event values in the body override the batch's shared values in the URL.
+    const last = (k) => params.getAll(k).at(-1);
+    gaHits.push({ en: last('en'), dl: last('dl'), dt: last('dt') });
   }
   return route.fulfill({ status: 204, body: '' });
 });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
-// Failed loads from Google's analytics hosts are expected (hits are aborted below, and some
-// networks block the tag); they are not app errors.
+// Failed loads from Google's analytics hosts are expected on networks that block the tag;
+// they are not app errors.
 const isAnalytics = (url = '') => /googletagmanager\.com|google-analytics\.com/.test(url);
 page.on('console', (m) => m.type() === 'error' && !isAnalytics(m.location().url) && errors.push(m.text()));
 try {
