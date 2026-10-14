@@ -1,0 +1,52 @@
+name: Refresh NHL data
+
+on:
+  schedule:
+    - cron: '17 10 * * *' # daily, ~5–6am US Eastern (runs on the default branch)
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/refresh-data.ts'
+      - 'src/data/**'
+      - '.github/workflows/refresh-data.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-data-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Fetch, reconcile and validate
+        run: npm run data:refresh
+      - name: Upload raw responses and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: data-raw
+          path: data-raw/
+          if-no-files-found: ignore
+      - name: Commit updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git add public/data
+          if git diff --cached --quiet; then
+            echo "No data changes."
+          else
+            git commit -m "data: refresh NHL schedule and player directory"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
