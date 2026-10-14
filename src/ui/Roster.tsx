@@ -17,7 +17,7 @@ interface ReviewLine {
 
 export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
   const { state, dispatch, resolve, toast } = useApp();
-  const [pasteOpen, setPasteOpen] = useState(false);
+  const [mode, setMode] = useState<'paste' | 'search'>('paste');
   const [review, setReview] = useState<ReviewLine[] | null>(null);
   const onRoster = useMemo(() => new Set(state.roster.map((e) => e.playerId)), [state.roster]);
 
@@ -59,21 +59,27 @@ export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
           )}
         </div>
         <div className="panel-body stack">
-          <div className="add-bar">
-            <PlayerSearch onPick={add} exclude={onRoster} autoFocus={state.roster.length === 0} placeholder="Add a player by name…" />
-            <button className="btn" onClick={() => setPasteOpen((o) => !o)} aria-expanded={pasteOpen}>
-              {pasteOpen ? 'Close paste' : 'Paste a list'}
+          <div className="mode-switch" role="tablist" aria-label="Add players">
+            <button role="tab" aria-selected={mode === 'paste'} onClick={() => setMode('paste')}>
+              Paste roster
+            </button>
+            <button role="tab" aria-selected={mode === 'search'} onClick={() => setMode('search')}>
+              Search players
             </button>
           </div>
-          {pasteOpen && !review && <PasteBox onParsed={setReview} />}
-          {review && (
+          {mode === 'search' && (
+            <div className="add-bar">
+              <PlayerSearch onPick={add} exclude={onRoster} autoFocus placeholder="Add a player by name…" />
+            </div>
+          )}
+          {mode === 'paste' && !review && <PasteBox onParsed={setReview} autoFocus={state.roster.length === 0} />}
+          {mode === 'paste' && review && (
             <ImportReview
               lines={review}
               onChange={setReview}
               onDone={(ids) => {
                 dispatch({ type: 'addPlayers', ids });
                 setReview(null);
-                setPasteOpen(false);
                 toast(`Added ${ids.length} player${ids.length === 1 ? '' : 's'}`);
               }}
               onCancel={() => setReview(null)}
@@ -105,7 +111,7 @@ export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
   );
 }
 
-function PasteBox({ onParsed }: { onParsed: (lines: ReviewLine[]) => void }) {
+function PasteBox({ onParsed, autoFocus }: { onParsed: (lines: ReviewLine[]) => void; autoFocus?: boolean }) {
   const { data } = useApp();
   const index = usePlayerIndex();
   const [text, setText] = useState('');
@@ -121,12 +127,13 @@ function PasteBox({ onParsed }: { onParsed: (lines: ReviewLine[]) => void }) {
   };
   return (
     <div className="stack" style={{ gap: 8 }}>
+      <p className="paste-hint">Paste your fantasy roster below to automatically identify the player names.</p>
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder={'Connor McDavid\nQuinn Hughes, VAN\nIgor Shesterkin\n…'}
         aria-label="Paste player names"
-        autoFocus
+        autoFocus={autoFocus}
       />
       <div>
         <button className="btn primary" disabled={!text.trim()} onClick={parse}>
@@ -314,11 +321,12 @@ function RosterTable() {
                       <button className="btn ghost small" onClick={() => dispatch({ type: 'updateEntry', id: e.playerId, patch: { positionsOverride: undefined } })} title={`Data: ${p.positions.join('/')}`}>
                         reset
                       </button>
-                    ) : (
-                      <span className="small muted" title={p.eligibilitySource === 'espn' ? 'ESPN fantasy eligibility' : p.eligibilitySource === 'nhl' ? 'NHL listed position' : 'Entered by you'}>
-                        {p.eligibilitySource === 'espn' ? 'ESPN' : p.eligibilitySource === 'nhl' ? 'NHL' : 'you'}
+                    ) : p.eligibilitySource !== 'espn' ? (
+                      // ESPN eligibility is the norm and isn't labeled; flag only the exceptions.
+                      <span className="small muted" title={p.eligibilitySource === 'nhl' ? 'NHL listed position (no ESPN eligibility found)' : 'Entered by you'}>
+                        {p.eligibilitySource === 'nhl' ? 'NHL' : 'you'}
                       </span>
-                    )}
+                    ) : null}
                   </td>
                   <td className="n">{games}</td>
                   <td>

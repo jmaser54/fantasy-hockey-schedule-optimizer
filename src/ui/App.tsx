@@ -70,9 +70,8 @@ export function App() {
             <div className="brand">
               Playoff <span>Schedule</span> Optimizer
             </div>
-            <DataChip status={status} />
-            <button className="icon-btn" onClick={() => setSettingsOpen(true)} aria-label="League settings" title="League settings">
-              ⚙︎ <span className="small">Settings</span>
+            <button className="settings-btn" onClick={() => setSettingsOpen(true)} aria-label="League settings" title="Review and adjust your league settings">
+              <span aria-hidden="true">⚙︎</span> League settings
             </button>
           </div>
           <nav className="tabs" role="tablist">
@@ -103,20 +102,15 @@ export function App() {
           </Ready>
         )}
       </main>
+      <DataFooter status={status} />
       {toastMsg && <div className="toast" role="status">{toastMsg}</div>}
     </>
   );
 }
 
-function DataChip({ status }: { status: DataStatus }) {
-  if (status.state === 'loading') return null;
-  if (status.state === 'error') {
-    return (
-      <span className="status-chip error" title={status.message}>
-        <span className="dot" /> Data unavailable
-      </span>
-    );
-  }
+/** Subtle data-freshness note at the foot of the page (errors are shown in the main area). */
+function DataFooter({ status }: { status: DataStatus }) {
+  if (status.state !== 'ready') return null;
   const d = status.data;
   const when = formatShort(d.scheduleFetchedAt.slice(0, 10));
   const title = [
@@ -126,9 +120,9 @@ function DataChip({ status }: { status: DataStatus }) {
     ...d.warnings.slice(0, 3),
   ].join('\n');
   return (
-    <span className={`status-chip${status.stale ? ' stale' : ''}`} title={title}>
-      <span className="dot" /> {status.stale ? `NHL data from ${when} — may be outdated` : `NHL data · ${when}`}
-    </span>
+    <footer className={`data-status${status.stale ? ' stale' : ''}`} title={title}>
+      {status.stale ? `NHL data from ${when}, may be outdated` : `NHL data updated ${when}`}
+    </footer>
   );
 }
 

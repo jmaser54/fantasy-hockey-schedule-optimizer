@@ -6,12 +6,6 @@ import { useApp } from './context.ts';
 
 type SortKey = { kind: 'window'; id: string } | { kind: 'light' } | { kind: 'team' };
 
-function heat(value: number, min: number, max: number): string {
-  if (max === min) return '';
-  const t = (value - min) / (max - min);
-  return t >= 0.85 ? 'heat-4' : t >= 0.6 ? 'heat-3' : t >= 0.35 ? 'heat-2' : t >= 0.1 ? 'heat-1' : '';
-}
-
 export function RankingsView() {
   const { data, windows, selected, state, resolve } = useApp();
   const [sort, setSort] = useState<SortKey | null>(null);
@@ -61,12 +55,6 @@ export function RankingsView() {
     const bv = activeSort.kind === 'light' ? b.light : b.values[ci]!;
     return bv - av || (activeSort.kind === 'light' ? b.values[ci]! - a.values[ci]! : b.light - a.light) || a.team.localeCompare(b.team);
   });
-  const range = (i: number) => {
-    const vals = rows.map((r) => r.values[i]!);
-    return [Math.min(...vals), Math.max(...vals)] as const;
-  };
-  const ranges = cols.map((_, i) => range(i));
-  const lightRange = [Math.min(...rows.map((r) => r.light)), Math.max(...rows.map((r) => r.light))] as const;
 
   // League-wide games per night in the selected window.
   const nights = selected.dates.map((d) => ({ d, n: data.schedule.gamesOn(d).length }));
@@ -85,12 +73,12 @@ export function RankingsView() {
 
   return (
     <div className="stack">
-      <section className="panel">
+      <section className="panel chart-panel">
         <div className="panel-head">
           <h2>Games per night</h2>
           <span className="legend">
             <span>
-              <i style={{ background: 'var(--good)' }} />
+              <i style={{ background: 'var(--green)' }} />
               Light night: 8 or fewer games ({lightCount} in range)
             </span>
           </span>
@@ -141,11 +129,11 @@ export function RankingsView() {
                       </div>
                     </td>
                     {r.values.map((v, i) => (
-                      <td key={cols[i]!.id} className={`n ${heat(v, ranges[i]![0], ranges[i]![1])} ${cols[i]!.id === selected.id ? 'col-selected' : ''}`}>
+                      <td key={cols[i]!.id} className={`n ${cols[i]!.id === selected.id ? 'col-selected' : ''}`}>
                         {v}
                       </td>
                     ))}
-                    <td className={`n ${heat(r.light, lightRange[0], lightRange[1])}`}>{r.light}</td>
+                    <td className="n">{r.light}</td>
                     <td className="n">{mine.get(r.team) ? <><span className="mine-dot" /> {mine.get(r.team)}</> : ''}</td>
                   </tr>
                   {expanded === r.team && (

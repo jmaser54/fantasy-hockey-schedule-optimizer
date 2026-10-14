@@ -3,6 +3,7 @@ import { formatShort, weekday } from '../domain/dates.ts';
 import { expandSeats, lineupFromDay, moveInLineup, type DayResult, type LineupPlayer, type UnusedReason } from '../domain/optimizer.ts';
 import { opponent } from '../domain/schedule.ts';
 import type { ISODate } from '../domain/types.ts';
+import { dailyGroupCounts } from '../domain/capacity.ts';
 import { useApp, type Window } from './context.ts';
 import { PosBadges } from './common.tsx';
 
@@ -98,12 +99,15 @@ function Legend() {
       <span>
         <span className="cell ir" /> On IR
       </span>
+      <span>
+        <b className="count-key">Skaters, Goalies</b> rows: players with a game / active lineup slots
+      </span>
     </div>
   );
 }
 
 function LineupGrid(props: { window: Window; players: LineupPlayer[]; selectedDay: ISODate | null; onSelectDay: (d: ISODate) => void }) {
-  const { days, data, summarizeWindow } = useApp();
+  const { days, data, summarizeWindow, state } = useApp();
   const summary = summarizeWindow(props.window);
   const totals = new Map(summary.players.map((p) => [p.playerId, p]));
   const isGoalie = (p: LineupPlayer) => p.positions.every((x) => x === 'G');
@@ -113,11 +117,35 @@ function LineupGrid(props: { window: Window; players: LineupPlayer[]; selectedDa
     { label: 'IR', rows: props.players.filter((p) => p.onIr) },
   ].filter((g) => g.rows.length);
   const statusOf = (d: DayResult, id: string) => d.players.find((x) => x.playerId === id);
+  const counts = new Map(props.window.dates.map((d) => [d, dailyGroupCounts(days.get(d)!, props.players, state.league.slots)]));
+  const countRow = (group: 'skaters' | 'goalies', label: string) => (
+    <tr className="count-row">
+      <th className="sticky" title={`${label} with a game that day / active ${label.toLowerCase()} lineup slots`}>
+        {label}
+      </th>
+      {props.window.dates.map((d) => {
+        const c = counts.get(d)![group];
+        return (
+          <th
+            key={d}
+            className={`cnt ${c.available > c.capacity ? 'over' : ''} ${props.selectedDay === d ? 'sel' : ''}`}
+            title={`${formatShort(d)}: ${c.available} ${label.toLowerCase()} with a game, ${c.capacity} active slots`}
+            onClick={() => props.onSelectDay(d)}
+          >
+            {c.available}/{c.capacity}
+          </th>
+        );
+      })}
+      <th />
+    </tr>
+  );
 
   return (
     <div className="grid-wrap">
       <table className="lgrid">
         <thead>
+          {countRow('skaters', 'Skaters')}
+          {countRow('goalies', 'Goalies')}
           <tr>
             <th className="sticky">Player</th>
             {props.window.dates.map((d) => (
@@ -182,7 +210,7 @@ function LineupGrid(props: { window: Window; players: LineupPlayer[]; selectedDa
             {props.window.dates.map((d) => {
               const day = days.get(d)!;
               return (
-                <td key={d} title={`${day.usable} of ${day.scheduled} usable${day.manual ? ` (optimal ${day.optimalUsable})` : ''}`} style={day.manual ? { color: 'var(--accent)' } : undefined}>
+                <td key={d} title={`${day.usable} of ${day.scheduled} usable${day.manual ? ` (optimal ${day.optimalUsable})` : ''}`} style={day.manual ? { color: 'var(--blue)', fontWeight: 800 } : undefined}>
                   {day.scheduled ? `${day.usable}` : '·'}
                   <br />
                   <span style={{ fontWeight: 400 }}>{day.scheduled || ''}</span>

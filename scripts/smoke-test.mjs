@@ -54,11 +54,13 @@ try {
   await page.waitForSelector('table tbody tr', { timeout: 30_000 });
   const rows = await page.locator('table tbody tr').count();
   if (rows !== live.teams.length) fail(`rankings show ${rows} teams, expected ${live.teams.length}`);
-  const chip = await page.locator('.status-chip').innerText();
+  const chip = await page.locator('.data-status').innerText();
   if (!/NHL data/.test(chip)) fail(`unexpected data status: ${chip}`);
   console.log(`rankings OK: ${rows} teams; status "${chip.trim()}"`);
 
   await page.getByRole('tab', { name: /Roster/ }).click();
+  if (!(await page.getByLabel('Paste player names').isVisible())) fail('paste mode is not the default on the roster page');
+  await page.getByRole('tab', { name: 'Search players' }).click();
   await page.getByLabel('Search players').fill('Connor McDavid');
   await page.locator('.suggest li').first().click();
   await page.getByRole('tab', { name: 'Lineup' }).click();
