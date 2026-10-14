@@ -46,9 +46,27 @@ console.log(`live data OK: ${live.games.length} games, ${live.teams.length} team
 // 2. Drive the app.
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+
+// Google Analytics: record each GA4 hit, then abort it so test runs never reach the
+// real property. Reported below for visibility; never fails the smoke test.
+const gaHits = [];
+await page.route(/google-analytics\.com\/(g|[a-z]\/)?collect/, (route) => {
+  const req = route.request();
+  const body = req.postData() ?? '';
+  // A request can batch several events: one per line in the body, or a single one in the URL.
+  const lines = body ? body.split('\n').filter(Boolean) : [''];
+  for (const line of lines) {
+    const params = new URLSearchParams(`${new URL(req.url()).search.slice(1)}&${line}`);
+    gaHits.push({ en: params.getAll('en').at(-1), dl: params.get('dl') });
+  }
+  return route.abort();
+});
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
-page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+// Failed loads from Google's analytics hosts are expected (hits are aborted below, and some
+// networks block the tag); they are not app errors.
+const isAnalytics = (url = '') => /googletagmanager\.com|google-analytics\.com/.test(url);
+page.on('console', (m) => m.type() === 'error' && !isAnalytics(m.location().url) && errors.push(m.text()));
 try {
   await page.goto(base, { waitUntil: 'networkidle' });
   await page.waitForSelector('table tbody tr', { timeout: 30_000 });
@@ -73,6 +91,18 @@ try {
   const counts = await page.locator('.counts').innerText();
   if (!/Roster\s+1\//.test(counts)) fail(`roster not restored after reload: ${counts}`);
   console.log('persistence OK');
+
+  // Report GA4 page views for the initial load plus tab switches.
+  await page.goto(`${base}#rankings`, { waitUntil: 'networkidle' });
+  await page.reload({ waitUntil: 'networkidle' });
+  for (const tab of [/Roster/, 'Lineup', 'Trade Lab']) {
+    await page.getByRole('tab', { name: tab }).click();
+    await page.waitForTimeout(1500);
+  }
+  await page.waitForTimeout(3000);
+  const views = gaHits.filter((h) => h.en === 'page_view');
+  console.log(`analytics: ${gaHits.length} GA4 hits captured and blocked; page_view ${views.length}`);
+  for (const v of views) console.log(`  page_view ${v.dl}`);
 } finally {
   await browser.close();
 }
