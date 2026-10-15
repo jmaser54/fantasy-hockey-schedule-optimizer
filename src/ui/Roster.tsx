@@ -340,7 +340,7 @@ function RosterTable() {
                       }}
                     >
                       <option value="active">Active</option>
-                      <option value="ir">{state.league.irEligibility === 'injured' && !irAllowed ? 'IR (mark injured)' : 'IR'}</option>
+                      <option value="ir">IR</option>
                     </select>
                     {e.markedInjured && (
                       <button className="btn ghost small" title="You marked this player injured" onClick={() => dispatch({ type: 'updateEntry', id: e.playerId, patch: { markedInjured: false } })}>
