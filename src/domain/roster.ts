@@ -50,7 +50,7 @@ export function validateRoster(
 export function describeIssue(issue: RosterIssue): string {
   switch (issue.kind) {
     case 'over-roster':
-      return `${issue.count} players on the roster; the limit is ${issue.limit}. Drop players or move eligible ones to IR.`;
+      return `Your roster has ${issue.count} players, but your current limit is ${issue.limit}. If your roster is correct, update your league settings. Otherwise, drop players or move eligible players to IR.`;
     case 'over-ir':
       return `${issue.count} players on IR; the league allows ${issue.limit}.`;
     case 'ir-ineligible':
