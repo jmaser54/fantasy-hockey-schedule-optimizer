@@ -20,7 +20,9 @@ Fantasy hockey playoff optimizer: maximizes **usable player-games** (not points)
 - Window totals are sums of the daily maxima. This is exactly optimal because lineup moves are free and days are independent.
 - IR players are never lineup candidates. IR capacity is in addition to roster size, and both limits are read from the league config.
 - Goalie games count as start opportunities (the team plays), not confirmed starts, and are reported separately.
-- Unused games carry a reason: on IR, no slot accepts the position, eligible slots are full (with the occupants named), or benched by a manual lineup.
+- Unused games carry a reason: on IR, no slot accepts the position, eligible slots are full (with the occupants named), or sat by the user's choice for that date.
+- Priorities: a roster player can be marked Preferred (★). Players are offered seats in priority order (Preferred, then roster order) by the same augmenting-path matching, which never drops a seated player, so every day still fills the maximum number of spots and seats as many Preferred players as possible.
+- Daily choices: per date the user can Start or Sit players. Starts are seated first, sits are left out, and the rest is filled automatically by priority. Choices that can't be honored (IR, no game, no room among other starts) are ignored and listed on that day. Choices are stored per date, persist in localStorage, and are carried across player-id migrations; older saved full lineups load as that date's starts.
 - **Assumptions (not modeled):** games-played caps, transaction limits, weekly lineup locks.
 
 ### Data sources (verified with real data on 2026-10-14 via GitHub Actions)
@@ -51,7 +53,8 @@ Fantasy hockey playoff optimizer: maximizes **usable player-games** (not points)
 - [x] Roster: autocomplete, bulk paste with review (matched, ambiguous, suggested, unmatched), custom players, IR with eligibility rules, eligibility overrides, conflict reporting
 - [x] League settings: roster size, IR slots and rule, lineup slots (count and accepted positions). Changes keep the roster and report conflicts.
 - [x] Lineup: per-window summary cards, player × date grid with usable/benched/IR marks, daily detail with reasons and NHL games
-- [x] Manual lineup overrides per date, clearly badged with the optimal total; reset per day or per window
+- [x] Daily Start/Sit choices per date, auto-filled around them, badged "Your Changes" with the optimal total; reset per day or per window
+- [x] Preferred (★) players get contested lineup spots first, without reducing filled spots; toggled from the Lineup grid, day view or Roster table
 - [x] Trade lab: drop and add, before/after table by round and full playoffs, undo, back to current roster, apply
 - [x] CI workflow: typecheck, tests, build, and bundled-data validation
 

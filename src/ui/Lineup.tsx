@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { formatShort, weekday } from '../domain/dates.ts';
-import { expandSeats, lineupFromDay, moveInLineup, type DayResult, type LineupPlayer, type UnusedReason } from '../domain/optimizer.ts';
+import { canStartTogether, expandSeats, sitPlayer, startPlayer, type DayResult, type LineupPlayer, type UnusedReason } from '../domain/optimizer.ts';
 import { opponent } from '../domain/schedule.ts';
 import type { ISODate } from '../domain/types.ts';
 import { dailyGroupCounts, lineupGroupTotals } from '../domain/capacity.ts';
 import { useApp, type Window } from './context.ts';
-import { PosBadges } from './common.tsx';
+import { PosBadges, PreferredToggle } from './common.tsx';
 
 export function LineupView({ onGoRoster }: { onGoRoster: () => void }) {
   const { state, selected, lineupPlayers, dispatch, summarizeWindow, days } = useApp();
@@ -27,6 +27,7 @@ export function LineupView({ onGoRoster }: { onGoRoster: () => void }) {
 
   const summary = summarizeWindow(selected);
   const manualDates = selected.dates.filter((d) => days.get(d)?.manual);
+  const issueDates = selected.dates.filter((d) => days.get(d)?.manualIssues.length);
 
   return (
     <div className="stack">
@@ -38,11 +39,22 @@ export function LineupView({ onGoRoster }: { onGoRoster: () => void }) {
           </h2>
           {manualDates.length > 0 && (
             <>
-              <span className="badge manual">
-                Manual lineup on {manualDates.length} day{manualDates.length === 1 ? '' : 's'} · optimal {summary.optimalUsable}
+              <span className="badge manual" title="Days where you started or sat players. Other days are fully optimized.">
+                Your changes on {manualDates.length} day{manualDates.length === 1 ? '' : 's'}
+                {summary.usable < summary.optimalUsable ? ` · optimal ${summary.optimalUsable}` : ''}
               </span>
-              <button className="btn small" onClick={() => dispatch({ type: 'clearManual', dates: manualDates })}>
-                Reset to Optimal
+              {issueDates.length > 0 && (
+                <button className="badge warn" style={{ border: 0, cursor: 'pointer' }} onClick={() => setDay(issueDates[0]!)} title={issueDates.map(formatShort).join(', ')}>
+                  {issueDates.length} day{issueDates.length === 1 ? ' has' : 's have'} changes that no longer apply
+                </button>
+              )}
+              <button
+                className="btn small"
+                onClick={() => {
+                  if (confirm(`Remove your lineup changes on ${manualDates.length} day${manualDates.length === 1 ? '' : 's'} in ${selected.name}?`)) dispatch({ type: 'clearManual', dates: manualDates });
+                }}
+              >
+                Reset {selected.name} to Optimal
               </button>
             </>
           )}
@@ -51,7 +63,7 @@ export function LineupView({ onGoRoster }: { onGoRoster: () => void }) {
         <LineupGrid window={selected} players={lineupPlayers} selectedDay={day} onSelectDay={(d) => setDay(d === day ? null : d)} />
       </section>
       {day && days.get(day) && <DayDetail day={days.get(day)!} onNav={(d) => setDay(d)} dates={selected.dates} />}
-      {!day && <p className="small muted" style={{ margin: 0 }}>Select a date to see that day’s lineup and change it.</p>}
+      {!day && <p className="small muted" style={{ margin: 0 }}>Select a date to see that day’s lineup and start or sit players.</p>}
     </div>
   );
 }
@@ -71,13 +83,13 @@ function SummaryCards() {
             <div className="big">
               {t.all.inLineup} <small>of {t.all.scheduled}</small>
             </div>
-            <div className="sub" title="Scheduled games of your non-IR players that fit your optimized daily lineup">games fit your lineup</div>
+            <div className="sub" title="Scheduled games of your non-IR players that are in your final daily lineups">games fit your lineup</div>
             <div className="sub">
               <span title={`In lineup / scheduled games in ${w.name}, summed from the player rows (players on IR excluded)`}>
                 <span style={{ whiteSpace: 'nowrap' }}>Skaters {t.skaters.inLineup}/{t.skaters.scheduled}</span> ·{' '}
                 <span style={{ whiteSpace: 'nowrap' }}>Goalies {t.goalies.inLineup}/{t.goalies.scheduled}</span>
               </span>
-              {s.manualDays ? <> · <span className="badge manual">manual</span></> : null}
+              {s.manualDays ? <> · <span className="badge manual" title={`Your changes on ${s.manualDays} day${s.manualDays === 1 ? '' : 's'}`}>edited</span></> : null}
             </div>
             <div className="meter">
               <div style={{ width: `${pct}%` }} />
@@ -99,10 +111,13 @@ function Legend() {
         <span className="cell unused" /> Game, no open slot
       </span>
       <span>
-        <span className="cell idle" /> Started with no game
+        <span className="cell ir" /> On IR
       </span>
       <span>
-        <span className="cell ir" /> On IR
+        <span className="star" aria-hidden="true" style={{ color: 'var(--warn)' }}>★</span> Preferred: gets lineup spots first
+      </span>
+      <span>
+        <span className="legend-mark" /> Your changes that day
       </span>
       <span>
         <b className="count-key">Skaters, Goalies</b> rows: players with a game / active lineup slots
@@ -156,9 +171,9 @@ function LineupGrid(props: { window: Window; players: LineupPlayer[]; selectedDa
             {props.window.dates.map((d) => (
               <th
                 key={d}
-                className={`dh ${props.selectedDay === d ? 'sel' : ''}`}
+                className={`dh ${props.selectedDay === d ? 'sel' : ''} ${days.get(d)?.manualIssues.length ? 'issue' : days.get(d)?.manual ? 'man' : ''}`}
                 onClick={() => props.onSelectDay(d)}
-                title={`${weekday(d)} ${formatShort(d)} · ${data.schedule.gamesOn(d).length} NHL games`}
+                title={`${weekday(d)} ${formatShort(d)} · ${data.schedule.gamesOn(d).length} NHL games${days.get(d)?.manual ? ' · your changes' : ''}`}
               >
                 {weekday(d)[0]}
                 <br />
@@ -178,7 +193,7 @@ function LineupGrid(props: { window: Window; players: LineupPlayer[]; selectedDa
                 return (
                   <tr key={p.id}>
                     <td className="sticky">
-                      {p.name} <PosBadges positions={p.positions} />
+                      <PreferredToggle id={p.id} name={p.name} preferred={!!p.preferred} /> {p.name} <PosBadges positions={p.positions} />
                     </td>
                     {props.window.dates.map((d) => {
                       const day = days.get(d)!;
@@ -190,10 +205,8 @@ function LineupGrid(props: { window: Window; players: LineupPlayer[]; selectedDa
                         title = `${formatShort(d)} ${o.home ? 'vs' : '@'} ${o.team}`;
                         cls = p.onIr ? 'ir' : st.seatKey ? 'used' : 'unused';
                         if (st.reason) title += ` — ${reasonText(st.reason)}`;
-                      } else if (st?.seatKey) {
-                        cls = 'idle';
-                        title = `${formatShort(d)}: no game, but in your lineup`;
                       }
+                      if (st?.choice === 'start') title += ' — you started this player';
                       return (
                         <td key={d} className={`c ${props.selectedDay === d ? 'sel' : ''}`} title={title} onClick={() => props.onSelectDay(d)}>
                           {cls && <span className={`cell ${cls}`} />}
@@ -215,7 +228,7 @@ function LineupGrid(props: { window: Window; players: LineupPlayer[]; selectedDa
             {props.window.dates.map((d) => {
               const day = days.get(d)!;
               return (
-                <td key={d} title={`${day.usable} of ${day.scheduled} games fit your lineup${day.manual ? ` (optimal ${day.optimalUsable})` : ''}`} style={day.manual ? { color: 'var(--accent)' } : undefined}>
+                <td key={d} title={`${day.usable} of ${day.scheduled} games fit your lineup${day.manual ? ` (your changes; optimal ${day.optimalUsable})` : ''}`} style={day.manual ? { color: 'var(--accent)' } : undefined}>
                   {day.scheduled ? `${day.usable}` : '·'}
                   <br />
                   <span style={{ fontWeight: 400 }}>{day.scheduled || ''}</span>
@@ -256,6 +269,8 @@ export function reasonText(r: UnusedReason): string {
       return `${r.slotLabels.join('/')} full (${r.occupants.join(', ')})`;
     case 'benched':
       return 'benched with an open slot';
+    case 'sat':
+      return 'sitting out by your choice';
   }
 }
 
@@ -263,25 +278,24 @@ function DayDetail({ day, onNav, dates }: { day: DayResult; onNav: (d: ISODate) 
   const { state, dispatch, lineupPlayers, data, teams } = useApp();
   const seats = useMemo(() => expandSeats(state.league.slots), [state.league.slots]);
   const status = new Map(day.players.map((s) => [s.playerId, s]));
+  const byId = new Map(lineupPlayers.map((p) => [p.id, p]));
   const idx = dates.indexOf(day.date);
   const nhlGames = data.schedule.gamesOn(day.date);
+  const override = state.manual[day.date];
+  const started = lineupPlayers.filter((p) => status.get(p.id)?.choice === 'start');
 
-  const assign = (seatKey: string, playerId: string) => {
-    const seat = seats.find((s) => s.key === seatKey)!;
-    const current = lineupFromDay(day);
-    let next;
-    if (!playerId) {
-      next = { ...current };
-      delete next[seatKey];
-    } else {
-      next = moveInLineup(current, playerId, seat, seats, lineupPlayers);
-    }
-    dispatch({ type: 'setManual', date: day.date, lineup: next });
+  const start = (id: string) => dispatch({ type: 'setManual', date: day.date, override: startPlayer(override, id) });
+  const sit = (id: string) => dispatch({ type: 'setManual', date: day.date, override: sitPlayer(override, id) });
+  const matchup = (id: string) => {
+    const st = status.get(id);
+    if (!st?.game) return '';
+    const o = opponent(st.game, st.team);
+    return `${o.home ? 'vs' : '@'} ${o.team}`;
   };
 
-  const bench = lineupPlayers.filter((p) => !status.get(p.id)?.seatKey);
-  const withGame = bench.filter((p) => status.get(p.id)?.game);
-  const without = bench.filter((p) => !status.get(p.id)?.game);
+  const out = lineupPlayers.filter((p) => !p.onIr && status.get(p.id)?.game && !status.get(p.id)?.seatKey);
+  const ir = lineupPlayers.filter((p) => p.onIr && status.get(p.id)?.game);
+  const without = lineupPlayers.filter((p) => !p.onIr && !status.get(p.id)?.game);
 
   return (
     <section className="panel">
@@ -299,61 +313,80 @@ function DayDetail({ day, onNav, dates }: { day: DayResult; onNav: (d: ISODate) 
         </h2>
         {day.manual ? (
           <>
-            <span className="badge manual">Manual{day.usable < day.optimalUsable ? ` · optimal ${day.optimalUsable}` : ''}</span>
-            <button className="btn small" onClick={() => dispatch({ type: 'setManual', date: day.date, lineup: null })}>
+            <span className="badge manual">Your Changes{day.usable < day.optimalUsable ? ` · optimal ${day.optimalUsable}` : ''}</span>
+            <button className="btn small" onClick={() => dispatch({ type: 'setManual', date: day.date, override: null })}>
               Reset Day to Optimal
             </button>
           </>
         ) : (
-          <span className="badge good">Optimal</span>
+          <span className="badge good">Optimized</span>
         )}
       </div>
       <div className="panel-body">
         {day.manualIssues.length > 0 && (
           <div className="notice" style={{ marginBottom: 12 }}>
-            Some manual placements no longer apply: {day.manualIssues.join(' ')}
+            Some of your changes for this day no longer apply and are being ignored: {day.manualIssues.join(' ')}
           </div>
         )}
         <div className="day-grid">
           <div>
-            <h3 style={{ marginTop: 0 }}>Lineup</h3>
+            <h3 style={{ marginTop: 0 }}>In Lineup</h3>
             {day.seats.map(({ seat, playerId }) => {
-              const eligible = lineupPlayers.filter((p) => !p.onIr && p.positions.some((x) => seat.accepts.includes(x)));
-              const hasGame = playerId ? !!status.get(playerId)?.game : false;
+              const p = playerId ? byId.get(playerId) : undefined;
+              const st = playerId ? status.get(playerId) : undefined;
               return (
                 <div className="seat" key={seat.key}>
                   <span className="slot">{seat.label}</span>
-                  <select className={playerId && !hasGame ? 'nogame' : ''} value={playerId ?? ''} onChange={(e) => assign(seat.key, e.target.value)} aria-label={`${seat.label} slot`}>
-                    <option value="">— Empty —</option>
-                    {eligible.map((p) => {
-                      const st = status.get(p.id);
-                      const g = st?.game;
-                      const o = g ? opponent(g, st!.team) : undefined;
-                      return (
-                        <option key={p.id} value={p.id}>
-                          {p.name} {o ? `(${o.home ? 'vs' : '@'} ${o.team})` : '(no game)'}
-                          {st?.seatKey && st.seatKey !== seat.key ? ' · in lineup' : ''}
-                        </option>
-                      );
-                    })}
-                  </select>
+                  {p ? (
+                    <>
+                      <span className="who">
+                        <PreferredToggle id={p.id} name={p.name} preferred={!!p.preferred} /> <b>{p.name}</b> <PosBadges positions={p.positions} />{' '}
+                        <span className="small">{matchup(p.id)}</span> {st?.choice === 'start' && <span className="badge manual">You started</span>}
+                      </span>
+                      <button className="btn small" onClick={() => sit(p.id)} title={`Sit ${p.name} on ${formatShort(day.date)}; the optimizer refills the spot`}>
+                        Sit
+                      </button>
+                    </>
+                  ) : (
+                    <span className="empty-seat">Empty</span>
+                  )}
                 </div>
               );
             })}
           </div>
           <div>
-            <h3 style={{ marginTop: 0 }}>Bench</h3>
-            {withGame.length === 0 && without.length === 0 && <div className="muted small">Nobody on the bench.</div>}
-            {withGame.map((p) => {
+            <h3 style={{ marginTop: 0 }}>Sitting Out</h3>
+            {out.length === 0 && <div className="muted small">Everyone with a game is in the lineup.</div>}
+            {out.map((p) => {
               const st = status.get(p.id)!;
-              const o = opponent(st.game!, st.team);
+              const fits = canStartTogether([...started, p], seats);
               return (
                 <div className="bench-item" key={p.id}>
-                  <b>{p.name}</b> <PosBadges positions={p.positions} /> <span className="small">{o.home ? 'vs' : '@'} {o.team}</span>
+                  <span>
+                    <PreferredToggle id={p.id} name={p.name} preferred={!!p.preferred} /> <b>{p.name}</b> <PosBadges positions={p.positions} />{' '}
+                    <span className="small">{matchup(p.id)}</span>
+                  </span>
                   <div className="reason">{st.reason ? reasonText(st.reason) : ''}</div>
+                  <button
+                    className="btn small primary"
+                    disabled={!fits}
+                    onClick={() => start(p.id)}
+                    title={
+                      fits
+                        ? `Start ${p.name} on ${formatShort(day.date)}; the lowest-priority player who competes for the spot sits`
+                        : 'No room: every slot this player fits already holds a player you started. Sit one of them first.'
+                    }
+                  >
+                    Start
+                  </button>
                 </div>
               );
             })}
+            {ir.length > 0 && (
+              <div className="small muted" style={{ marginTop: 8 }}>
+                On IR: {ir.map((p) => p.name).join(', ')}
+              </div>
+            )}
             {without.length > 0 && (
               <div className="small muted" style={{ marginTop: 8 }}>
                 No game: {without.map((p) => p.name).join(', ')}

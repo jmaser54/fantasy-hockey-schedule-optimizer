@@ -93,4 +93,6 @@ export interface RosterEntry {
   positionsOverride?: Position[];
   /** User says this player is injured (for IR eligibility). */
   markedInjured?: boolean;
+  /** Gets lineup spots first when players compete for them (stored only when true). */
+  preferred?: boolean;
 }

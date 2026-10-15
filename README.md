@@ -6,7 +6,7 @@ A fantasy hockey tool that finds the lineups that maximize **usable player-games
 
 - **Team schedules:** NHL team games per round and across the full playoffs.
 - **Roster:** paste or search your roster, with ambiguous names resolved by you, never guessed.
-- **Lineup:** the optimal daily lineup per date (via bipartite matching), what each player actually contributes, and why a game can't be used. You can override it and reset.
+- **Lineup:** the optimal daily lineup per date (via bipartite matching), what each player actually contributes, and why a game doesn't fit. Star players as Preferred so they get contested spots first, start or sit anyone on a given day (the rest refills automatically), and reset any day to optimal.
 - **Trade lab:** test drops and adds against your current roster, with a before/after comparison.
 
 ## Develop

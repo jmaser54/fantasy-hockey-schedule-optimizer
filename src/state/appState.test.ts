@@ -42,12 +42,17 @@ describe('hypothetical transactions (spec case 11)', () => {
     expect(s.scenario).toEqual({ drops: [], adds: [] });
   });
 
-  it('manual lineups survive unrelated edits and are cleared per date on reset', () => {
+  it('daily choices survive unrelated edits and are cleared per date on reset', () => {
     let s = reducer(initialState(), { type: 'addPlayers', ids: ['a', 'b'] });
-    s = reducer(s, { type: 'setManual', date: '2027-03-01', lineup: { 'C#0': 'b' } });
-    s = reducer(s, { type: 'setManual', date: '2027-03-20', lineup: { 'C#0': 'a' } });
+    s = reducer(s, { type: 'setManual', date: '2027-03-01', override: { start: ['b'], sit: [] } });
+    s = reducer(s, { type: 'setManual', date: '2027-03-20', override: { start: [], sit: ['a'] } });
+    s = reducer(s, { type: 'updateEntry', id: 'a', patch: { preferred: true } });
     s = reducer(s, { type: 'scenario', scenario: { drops: ['a'], adds: [] } });
     expect(Object.keys(s.manual)).toEqual(['2027-03-01', '2027-03-20']);
+    // Period and custom-range changes keep choices on their own dates; they only apply when a window includes that date.
+    s = reducer(s, { type: 'setPeriods', periods: [{ id: 'r1', name: 'Round 1', start: '2027-03-10', end: '2027-03-15' }] });
+    s = reducer(s, { type: 'setCustom', start: '2027-03-02', end: '2027-03-03' });
+    expect(s.manual).toEqual({ '2027-03-01': { start: ['b'], sit: [] }, '2027-03-20': { start: [], sit: ['a'] } });
     s = reducer(s, { type: 'clearManual', dates: ['2027-03-01'] });
     expect(Object.keys(s.manual)).toEqual(['2027-03-20']);
   });
@@ -59,7 +64,8 @@ describe('persistence (spec case 12)', () => {
     s = reducer(s, { type: 'updateEntry', id: 'b', patch: { onIr: true, markedInjured: true } });
     s = reducer(s, { type: 'setLeague', league: { ...s.league, rosterSize: 18, irSlots: 3 } });
     s = reducer(s, { type: 'setCustom', start: '2027-03-01', end: '2027-03-10' });
-    s = reducer(s, { type: 'setManual', date: '2027-03-01', lineup: { 'C#0': 'a' } });
+    s = reducer(s, { type: 'setManual', date: '2027-03-01', override: { start: ['a'], sit: ['b'] } });
+    s = reducer(s, { type: 'updateEntry', id: 'a', patch: { preferred: true } });
     s = reducer(s, { type: 'scenario', scenario: { drops: ['a'], adds: ['c'] } });
     const { state, notice } = deserialize(serialize(s));
     expect(notice).toBeUndefined();
@@ -76,6 +82,18 @@ describe('persistence (spec case 12)', () => {
     expect(notice).toMatch(/league settings and playoff dates/);
   });
 
+  it('restores priorities and daily choices after a reload, and upgrades older saved lineups', () => {
+    let s = reducer(initialState(), { type: 'addPlayers', ids: ['a', 'b'] });
+    s = reducer(s, { type: 'updateEntry', id: 'b', patch: { preferred: true } });
+    s = reducer(s, { type: 'setManual', date: '2027-03-05', override: { start: ['a'], sit: ['b'] } });
+    const reloaded = deserialize(serialize(s)).state;
+    expect(reloaded.roster).toEqual([{ playerId: 'a', onIr: false }, { playerId: 'b', onIr: false, preferred: true }]);
+    expect(reloaded.manual).toEqual({ '2027-03-05': { start: ['a'], sit: ['b'] } });
+    // Old format: a full lineup per date (seat → player). Its players become that date's starts.
+    const old = JSON.stringify({ roster: [{ playerId: 'a', onIr: false }], manual: { '2027-03-05': { 'C#0': 'a', 'G#0': 'g' }, '2027-03-06': {}, bad: { x: 'a' } } });
+    expect(deserialize(old).state.manual).toEqual({ '2027-03-05': { start: ['a', 'g'], sit: [] } });
+  });
+
   it('starts fresh with nothing saved', () => {
     expect(deserialize(null)).toEqual({ state: initialState() });
   });
@@ -88,7 +106,7 @@ describe('roster operations', () => {
     s = reducer(s, { type: 'setLeague', league: { ...s.league, rosterSize: 18, irSlots: 3 } });
     s = reducer(s, { type: 'setCustom', start: '2027-03-01', end: '2027-03-10' });
     s = reducer(s, { type: 'addCustomPlayer', player: { id: 'custom-1', name: 'New Guy', team: 'TOR', positions: ['C'], eligibilitySource: 'user' } });
-    s = reducer(s, { type: 'setManual', date: '2027-03-01', lineup: { 'C#0': 'a' } });
+    s = reducer(s, { type: 'setManual', date: '2027-03-01', override: { start: ['a'], sit: [] } });
     s = reducer(s, { type: 'scenario', scenario: { drops: ['a'], adds: ['z'] } });
 
     const cleared = reducer(s, { type: 'clearRoster' });
@@ -106,12 +124,28 @@ describe('roster operations', () => {
   });
 
 
-  it('moving a player to IR removes them from manual lineups; league changes keep the roster', () => {
-    let s = reducer(initialState(), { type: 'addPlayers', ids: ['a', 'b', 'a'] });
-    expect(s.roster).toHaveLength(2);
-    s = reducer(s, { type: 'setManual', date: '2027-03-01', lineup: { 'C#0': 'a', 'C#1': 'b' } });
+  it('roster changes keep daily choices consistent; league changes keep the roster', () => {
+    let s = reducer(initialState(), { type: 'addPlayers', ids: ['a', 'b', 'c', 'a'] });
+    expect(s.roster).toHaveLength(3);
+    s = reducer(s, { type: 'setManual', date: '2027-03-01', override: { start: ['a', 'b'], sit: [] } });
+    s = reducer(s, { type: 'setManual', date: '2027-03-02', override: { start: ['c'], sit: [] } });
+    // IR keeps the choice (the optimizer reports it as not applying while the player is on IR).
     s = reducer(s, { type: 'updateEntry', id: 'a', patch: { onIr: true } });
-    expect(s.manual['2027-03-01']).toEqual({ 'C#1': 'b' });
+    expect(s.manual['2027-03-01']).toEqual({ start: ['a', 'b'], sit: [] });
+    // Removing a player removes their choices; a date left with none becomes automatic again.
+    s = reducer(s, { type: 'removePlayer', id: 'c' });
+    expect(s.manual['2027-03-02']).toBeUndefined();
+    // A player id migration carries choices and priority to the new id.
+    s = reducer(s, { type: 'updateEntry', id: 'b', patch: { preferred: true } });
+    s = reducer(s, { type: 'replacePlayer', from: 'b', to: 'b2' });
+    expect(s.manual['2027-03-01']).toEqual({ start: ['a', 'b2'], sit: [] });
+    expect(s.roster.find((e) => e.playerId === 'b2')).toEqual({ playerId: 'b2', onIr: false, preferred: true });
+    // Un-preferring stores nothing.
+    s = reducer(s, { type: 'updateEntry', id: 'b2', patch: { preferred: false } });
+    expect(s.roster.find((e) => e.playerId === 'b2')).toEqual({ playerId: 'b2', onIr: false });
+    // An empty choice set clears the date.
+    s = reducer(s, { type: 'setManual', date: '2027-03-01', override: { start: [], sit: [] } });
+    expect(s.manual).toEqual({});
     s = reducer(s, { type: 'setLeague', league: { ...s.league, rosterSize: 1 } });
     expect(s.roster).toHaveLength(2); // conflicts are reported, never auto-removed
   });

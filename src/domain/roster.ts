@@ -68,7 +68,7 @@ export function toLineupPlayers(entries: readonly RosterEntry[], players: Readon
   for (const e of entries) {
     const p = players.get(e.playerId);
     if (!p) continue;
-    out.push({ id: p.id, name: p.name, team: p.team, stints: p.stints, positions: effectivePositions(e, p), onIr: e.onIr });
+    out.push({ id: p.id, name: p.name, team: p.team, stints: p.stints, positions: effectivePositions(e, p), onIr: e.onIr, ...(e.preferred ? { preferred: true } : {}) });
   }
   return out;
 }

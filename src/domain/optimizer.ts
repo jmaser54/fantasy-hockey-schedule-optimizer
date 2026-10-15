@@ -14,6 +14,17 @@
  *   maximum for any period.
  * - Goalie games are opportunities (the team plays), not confirmed starts.
  * - No games-played caps or acquisition limits are modeled.
+ *
+ * Priorities and daily choices:
+ * - Players are offered seats in priority order (Preferred first, then roster
+ *   order). Kuhn's algorithm never unmatches a matched player, so this is the
+ *   greedy algorithm on the transversal matroid of playing players: the lineup
+ *   still fills the maximum number of seats, and among all such lineups it
+ *   seats as many Preferred players as possible (ties by roster order).
+ * - A date can carry the user's choices: players to start and players to sit.
+ *   Starts are placed first, sits are left out, and the remaining seats are
+ *   filled automatically in priority order. Choices that can't be honored
+ *   (IR, no game, no room) are ignored and reported, never forced through.
  */
 import { eachDate } from './dates.ts';
 import { maxBipartiteMatching } from './matching.ts';
@@ -28,6 +39,8 @@ export interface LineupPlayer {
   /** Effective fantasy eligibility (overrides already applied). */
   positions: Position[];
   onIr: boolean;
+  /** Gets lineup spots first when players compete for them. */
+  preferred?: boolean;
 }
 
 export interface Seat {
@@ -47,22 +60,42 @@ export function expandSeats(slots: readonly LineupSlot[]): Seat[] {
   return seats;
 }
 
-/** A manual lineup for one date: seat key → player id. */
-export type ManualLineup = Record<string, string>;
+/** The user's choices for one date. Everything else is filled automatically. */
+export interface DayOverride {
+  /** Players the user put in the lineup. */
+  start: string[];
+  /** Players the user took out of the lineup. */
+  sit: string[];
+}
+
+export const isEmptyOverride = (o: DayOverride | undefined) => !o || (o.start.length === 0 && o.sit.length === 0);
+
+/** Put a player in the lineup for a date (undoes a sit). */
+export function startPlayer(o: DayOverride | undefined, id: string): DayOverride {
+  return { start: [...(o?.start ?? []).filter((x) => x !== id), id], sit: (o?.sit ?? []).filter((x) => x !== id) };
+}
+
+/** Take a player out of the lineup for a date (undoes a start). */
+export function sitPlayer(o: DayOverride | undefined, id: string): DayOverride {
+  return { start: (o?.start ?? []).filter((x) => x !== id), sit: [...(o?.sit ?? []).filter((x) => x !== id), id] };
+}
 
 export type UnusedReason =
   | { kind: 'ir' }
   | { kind: 'no-slot'; positions: Position[] }
   | { kind: 'slots-full'; slotLabels: string[]; occupants: string[] }
-  | { kind: 'benched' };
+  | { kind: 'benched' }
+  | { kind: 'sat' };
 
 export interface DayPlayerStatus {
   playerId: string;
   game?: Game;
   team: TeamId;
   seatKey?: string;
-  /** Set when the player had a game but it was not usable. */
+  /** Set when the player had a game but is not in the lineup. */
   reason?: UnusedReason;
+  /** The user chose to start (true) or sit (false) this player on this date. */
+  choice?: 'start' | 'sit';
 }
 
 export interface DayResult {
@@ -73,10 +106,11 @@ export interface DayResult {
   scheduled: number;
   usable: number;
   goalieUsable: number;
-  /** Max achievable on this date (equals usable when not manual). */
+  /** Max achievable on this date with no daily choices (equals usable when not manual). */
   optimalUsable: number;
+  /** The date has user choices (starts or sits). */
   manual: boolean;
-  /** Manual placements that were invalid and ignored. */
+  /** User choices that could not be honored and were ignored. */
   manualIssues: string[];
 }
 
@@ -94,13 +128,20 @@ function eligibleSeatIndices(p: LineupPlayer, seats: readonly Seat[]): number[] 
   return out;
 }
 
-/** Optimal lineup for one date. Deterministic for a given roster order. */
-function optimalAssignment(
-  playing: readonly LineupPlayer[],
-  seats: readonly Seat[],
-): (number | -1)[] {
-  const adjacency = playing.map((p) => eligibleSeatIndices(p, seats));
-  return maxBipartiteMatching(playing.length, seats.length, adjacency).leftToRight;
+/** Preferred players first, otherwise roster order (stable). */
+export function priorityOrder<T extends Pick<LineupPlayer, 'preferred'>>(players: readonly T[]): T[] {
+  return [...players].sort((x, y) => Number(!!y.preferred) - Number(!!x.preferred));
+}
+
+/** Greedy max matching in the given order: earlier players get seats first, without losing total seats. */
+function assignInOrder(ordered: readonly LineupPlayer[], seats: readonly Seat[]): (number | -1)[] {
+  const adjacency = ordered.map((p) => eligibleSeatIndices(p, seats));
+  return maxBipartiteMatching(ordered.length, seats.length, adjacency).leftToRight;
+}
+
+/** Whether all of these players can be in the lineup together. */
+export function canStartTogether(players: readonly LineupPlayer[], seats: readonly Seat[]): boolean {
+  return assignInOrder(players, seats).every((s) => s !== -1);
 }
 
 export function optimizeDay(
@@ -108,7 +149,7 @@ export function optimizeDay(
   roster: readonly LineupPlayer[],
   seats: readonly Seat[],
   schedule: ScheduleIndex,
-  manual?: ManualLineup,
+  override?: DayOverride,
 ): DayResult {
   const statuses: DayPlayerStatus[] = roster.map((p) => ({
     playerId: p.id,
@@ -118,52 +159,34 @@ export function optimizeDay(
   const byId = new Map(roster.map((p) => [p.id, p]));
   const statusById = new Map(statuses.map((s) => [s.playerId, s]));
 
-  const playing = roster.filter((p) => !p.onIr && statusById.get(p.id)!.game);
-  const optimal = optimalAssignment(playing, seats);
-  const optimalUsable = optimal.filter((s) => s !== -1).length;
+  const playing = priorityOrder(roster.filter((p) => !p.onIr && statusById.get(p.id)!.game));
+  const optimalUsable = assignInOrder(playing, seats).filter((s) => s !== -1).length;
 
-  const seatPlayer: (string | undefined)[] = new Array(seats.length).fill(undefined);
   const manualIssues: string[] = [];
-  const isManual = manual !== undefined;
-
-  if (!isManual) {
-    playing.forEach((p, i) => {
-      const s = optimal[i]!;
-      if (s !== -1) seatPlayer[s] = p.id;
-    });
-  } else {
-    const seatIndex = new Map(seats.map((s, i) => [s.key, i]));
-    const placed = new Set<string>();
-    for (const [seatKey, playerId] of Object.entries(manual)) {
-      const idx = seatIndex.get(seatKey);
-      const p = byId.get(playerId);
-      if (idx === undefined) {
-        manualIssues.push(`Slot ${seatKey} no longer exists.`);
-        continue;
-      }
-      if (!p) {
-        manualIssues.push('A player in this lineup is no longer on the roster.');
-        continue;
-      }
-      if (p.onIr) {
-        manualIssues.push(`${p.name} is on IR.`);
-        continue;
-      }
-      if (!p.positions.some((pos) => seats[idx]!.accepts.includes(pos))) {
-        manualIssues.push(`${p.name} is not eligible for ${seats[idx]!.label}.`);
-        continue;
-      }
-      if (placed.has(playerId)) {
-        manualIssues.push(`${p.name} is in two slots.`);
-        continue;
-      }
-      placed.add(playerId);
-      seatPlayer[idx] = playerId;
-    }
+  const isManual = !isEmptyOverride(override);
+  const started = new Set<string>();
+  const sat = new Set(override?.sit ?? []);
+  for (const id of override?.start ?? []) {
+    const p = byId.get(id);
+    if (!p) manualIssues.push('A player you chose to start is no longer on the roster.');
+    else if (p.onIr) manualIssues.push(`${p.name} is on IR, so they can’t start.`);
+    else if (!statusById.get(id)!.game) manualIssues.push(`${p.name} has no game on this date.`);
+    else started.add(id);
   }
+  for (const id of sat) if (statusById.has(id)) statusById.get(id)!.choice = 'sit';
 
-  // Players who sit in a seat (with or without a game, manual lineups may
-  // start a player who has no game).
+  // Starts first (in priority order), then everyone else not sat, in priority order.
+  const startOrder = playing.filter((p) => started.has(p.id));
+  const ordered = [...startOrder, ...playing.filter((p) => !started.has(p.id) && !sat.has(p.id))];
+  const assignment = assignInOrder(ordered, seats);
+  const seatPlayer: (string | undefined)[] = new Array(seats.length).fill(undefined);
+  ordered.forEach((p, i) => {
+    const s = assignment[i]!;
+    if (s !== -1) seatPlayer[s] = p.id;
+    else if (started.has(p.id)) manualIssues.push(`${p.name} couldn’t be started: every slot they fit holds another player you chose to start.`);
+  });
+  for (const p of startOrder) if (assignment[ordered.indexOf(p)] !== -1) statusById.get(p.id)!.choice = 'start';
+
   seats.forEach((_, i) => {
     const pid = seatPlayer[i];
     if (pid) statusById.get(pid)!.seatKey = seats[i]!.key;
@@ -180,12 +203,16 @@ export function optimizeDay(
     }
   });
 
-  // Explain every scheduled game that is not usable.
+  // Explain every scheduled game that is not in the lineup.
   for (const p of roster) {
     const st = statusById.get(p.id)!;
     if (!st.game || st.seatKey) continue;
     if (p.onIr) {
       st.reason = { kind: 'ir' };
+      continue;
+    }
+    if (sat.has(p.id)) {
+      st.reason = { kind: 'sat' };
       continue;
     }
     const eligible = eligibleSeatIndices(p, seats);
@@ -222,6 +249,7 @@ export interface PlayerTotals {
   playerId: string;
   /** NHL games the player's team(s) play in the range. */
   scheduled: number;
+  /** Games the player is in the final daily lineup (daily choices included). */
   usable: number;
 }
 
@@ -243,7 +271,7 @@ export function optimizeRange(
   roster: readonly LineupPlayer[],
   league: Pick<LeagueConfig, 'slots'>,
   schedule: ScheduleIndex,
-  manualByDate: Record<ISODate, ManualLineup> = {},
+  manualByDate: Record<ISODate, DayOverride> = {},
 ): RangeResult {
   const seats = expandSeats(league.slots);
   const days = eachDate(start, end).map((d) => optimizeDay(d, roster, seats, schedule, manualByDate[d]));
@@ -256,7 +284,7 @@ export function optimizeDates(
   roster: readonly LineupPlayer[],
   league: Pick<LeagueConfig, 'slots'>,
   schedule: ScheduleIndex,
-  manualByDate: Record<ISODate, ManualLineup> = {},
+  manualByDate: Record<ISODate, DayOverride> = {},
 ): Map<ISODate, DayResult> {
   const seats = expandSeats(league.slots);
   const out = new Map<ISODate, DayResult>();
@@ -287,37 +315,4 @@ export function summarize(days: readonly DayResult[], roster: readonly LineupPla
     manualDays: days.filter((d) => d.manual).length,
     players: [...totals.values()],
   };
-}
-
-/** Seed for a manual edit: the lineup currently shown for that day. */
-export function lineupFromDay(day: DayResult): ManualLineup {
-  const out: ManualLineup = {};
-  for (const { seat, playerId } of day.seats) if (playerId) out[seat.key] = playerId;
-  return out;
-}
-
-/**
- * Move a player into a seat in a manual lineup. Whoever held the seat goes to
- * the bench; if the player was in another seat that seat becomes empty
- * (or receives the displaced player when they are eligible for it — a swap).
- */
-export function moveInLineup(
-  lineup: ManualLineup,
-  playerId: string,
-  targetSeat: Seat | null,
-  seats: readonly Seat[],
-  roster: readonly LineupPlayer[],
-): ManualLineup {
-  const next: ManualLineup = { ...lineup };
-  const fromKey = Object.keys(next).find((k) => next[k] === playerId);
-  if (fromKey) delete next[fromKey];
-  if (!targetSeat) return next;
-  const displaced = next[targetSeat.key];
-  next[targetSeat.key] = playerId;
-  if (displaced && fromKey) {
-    const fromSeat = seats.find((s) => s.key === fromKey);
-    const dp = roster.find((p) => p.id === displaced);
-    if (fromSeat && dp && dp.positions.some((pos) => fromSeat.accepts.includes(pos))) next[fromKey] = displaced;
-  }
-  return next;
 }

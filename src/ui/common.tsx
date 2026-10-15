@@ -143,3 +143,20 @@ export function InfoTip({ label, children }: { label: string; children: ReactNod
     </span>
   );
 }
+
+/** ★ toggle for a roster player's Preferred status. */
+export function PreferredToggle({ id, name, preferred }: { id: string; name: string; preferred: boolean }) {
+  const { dispatch } = useApp();
+  return (
+    <button
+      type="button"
+      className="star"
+      aria-pressed={preferred}
+      aria-label={`Preferred: ${name}`}
+      title={preferred ? 'Preferred: gets lineup spots first. Click to remove.' : 'Mark as preferred so they get lineup spots first'}
+      onClick={() => dispatch({ type: 'updateEntry', id, patch: { preferred: !preferred } })}
+    >
+      {preferred ? '★' : '☆'}
+    </button>
+  );
+}

@@ -1,6 +1,6 @@
 import { isValidISODate } from '../domain/dates.ts';
 import { DEFAULT_LEAGUE, DEFAULT_PERIODS, validateLeague } from '../domain/league.ts';
-import type { ManualLineup } from '../domain/optimizer.ts';
+import { isEmptyOverride, type DayOverride } from '../domain/optimizer.ts';
 import { POSITIONS, type ISODate, type LeagueConfig, type Period, type Player, type Position, type RosterEntry } from '../domain/types.ts';
 
 export const STORAGE_KEY = 'playoff-optimizer:v1';
@@ -23,8 +23,8 @@ export interface AppState {
   roster: RosterEntry[];
   /** Players the user created because no data record matched. */
   customPlayers: Player[];
-  /** Manual lineups by date, for the saved roster. */
-  manual: Record<ISODate, ManualLineup>;
+  /** The user's start/sit choices by date, for the saved roster. Dates without choices are fully automatic. */
+  manual: Record<ISODate, DayOverride>;
   scenario: Scenario;
 }
 
@@ -55,19 +55,22 @@ export type Action =
   | { type: 'replacePlayer'; from: string; to: string }
   | { type: 'addCustomPlayer'; player: Player }
   | { type: 'clearRoster' }
-  | { type: 'setManual'; date: ISODate; lineup: ManualLineup | null }
+  | { type: 'setManual'; date: ISODate; override: DayOverride | null }
   | { type: 'clearManual'; dates?: ISODate[] }
   | { type: 'scenario'; scenario: Scenario }
   | { type: 'scenarioApply' };
 
-/** Remove a player from every manual lineup (other placements stay as the user set them). */
-function withoutPlayerInManual(manual: AppState['manual'], id: string): AppState['manual'] {
+/** Rewrite one player id in every date's choices (null removes it). Dates left without choices are dropped. */
+function mapPlayerInManual(manual: AppState['manual'], from: string, to: string | null): AppState['manual'] {
   const out: AppState['manual'] = {};
-  for (const [date, lineup] of Object.entries(manual)) {
-    out[date] = Object.fromEntries(Object.entries(lineup).filter(([, pid]) => pid !== id));
+  const fix = (ids: string[]) => [...new Set(ids.flatMap((id) => (id !== from ? [id] : to ? [to] : [])))];
+  for (const [date, o] of Object.entries(manual)) {
+    const next = { start: fix(o.start), sit: fix(o.sit) };
+    if (!isEmptyOverride(next)) out[date] = next;
   }
   return out;
 }
+const withoutPlayerInManual = (manual: AppState['manual'], id: string) => mapPlayerInManual(manual, id, null);
 
 export function proposedRoster(state: Pick<AppState, 'roster' | 'scenario'>): RosterEntry[] {
   const drops = new Set(state.scenario.drops);
@@ -107,16 +110,22 @@ export function reducer(state: AppState, action: Action): AppState {
         scenario: { ...state.scenario, drops: state.scenario.drops.filter((d) => d !== action.id) },
       };
     case 'updateEntry': {
-      const roster = state.roster.map((e) => (e.playerId === action.id ? { ...e, ...action.patch } : e));
-      const manual = action.patch.onIr ? withoutPlayerInManual(state.manual, action.id) : state.manual;
-      return { ...state, roster, manual };
+      // Daily choices are kept when a player moves to IR: they're reported as not applying
+      // on those dates and take effect again if the player comes off IR.
+      const roster = state.roster.map((e) => {
+        if (e.playerId !== action.id) return e;
+        const next = { ...e, ...action.patch };
+        if (!next.preferred) delete next.preferred;
+        return next;
+      });
+      return { ...state, roster };
     }
     case 'replacePlayer': {
       if (state.roster.some((e) => e.playerId === action.to)) return reducer(state, { type: 'removePlayer', id: action.from });
       return {
         ...state,
-        roster: state.roster.map((e) => (e.playerId === action.from ? { playerId: action.to, onIr: e.onIr } : e)),
-        manual: withoutPlayerInManual(state.manual, action.from),
+        roster: state.roster.map((e) => (e.playerId === action.from ? { ...e, playerId: action.to } : e)),
+        manual: mapPlayerInManual(state.manual, action.from, action.to),
       };
     }
     case 'addCustomPlayer':
@@ -127,7 +136,7 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, roster: [], manual: {}, scenario: { ...state.scenario, drops: [] } };
     case 'setManual': {
       const manual = { ...state.manual };
-      if (action.lineup) manual[action.date] = action.lineup;
+      if (action.override && !isEmptyOverride(action.override)) manual[action.date] = action.override;
       else delete manual[action.date];
       return { ...state, manual };
     }
@@ -188,6 +197,7 @@ function loadRoster(v: unknown): RosterEntry[] | undefined {
       onIr: e.onIr === true,
       ...(isPositions(e.positionsOverride) && e.positionsOverride.length ? { positionsOverride: e.positionsOverride } : {}),
       ...(e.markedInjured === true ? { markedInjured: true } : {}),
+      ...(e.preferred === true ? { preferred: true } : {}),
     });
   }
   return out;
@@ -201,12 +211,18 @@ function loadCustomPlayers(v: unknown): Player[] {
     .map((p) => ({ id: p.id as string, name: p.name as string, team: p.team as string, positions: p.positions as Position[], eligibilitySource: 'user' as const }));
 }
 
+/**
+ * Daily choices. Older saves stored a full lineup per date (seat key → player);
+ * those players become the date's starts and the rest is filled automatically.
+ */
 function loadManual(v: unknown): AppState['manual'] {
   if (!isObj(v)) return {};
   const out: AppState['manual'] = {};
-  for (const [date, lineup] of Object.entries(v)) {
-    if (!isValidISODate(date) || !isObj(lineup)) continue;
-    out[date] = Object.fromEntries(Object.entries(lineup).filter(([, pid]) => typeof pid === 'string')) as ManualLineup;
+  const ids = (x: unknown) => [...new Set(Array.isArray(x) ? x.filter((s): s is string => typeof s === 'string') : [])];
+  for (const [date, o] of Object.entries(v)) {
+    if (!isValidISODate(date) || !isObj(o)) continue;
+    const next = Array.isArray(o.start) || Array.isArray(o.sit) ? { start: ids(o.start), sit: ids(o.sit) } : { start: ids(Object.values(o)), sit: [] };
+    if (!isEmptyOverride(next)) out[date] = next;
   }
   return out;
 }

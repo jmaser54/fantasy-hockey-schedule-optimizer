@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { maxBipartiteMatching } from './matching.ts';
-import { expandSeats, lineupFromDay, moveInLineup, optimizeDay, optimizeRange } from './optimizer.ts';
+import { canStartTogether, expandSeats, optimizeDates, optimizeDay, optimizeRange, sitPlayer, startPlayer, type DayOverride, type LineupPlayer } from './optimizer.ts';
 import { player, sched, slots } from './testUtils.ts';
 
 describe('optimizer — hand-checkable cases', () => {
@@ -132,38 +132,46 @@ describe('optimizer — hand-checkable cases', () => {
     expect(r.days.filter((d) => d.scheduled).map((d) => d.date)).toEqual(['2027-03-01', '2027-03-03', '2027-03-06']);
   });
 
-  it('10. manual override changes the lineup and reset restores the optimum', () => {
+  it('10. a daily choice changes the lineup and reset restores the optimum', () => {
     const s = sched([['2027-03-01', 'AAA', 'BBB']]);
-    const roster = [player('X', 'AAA', ['C', 'LW']), player('Y', 'BBB', ['C']), player('Z', 'CCC', ['LW'])];
+    // X can play C or LW, Y only C, W only LW (same team as Y). Optimum: 2 of 3.
+    const roster = [player('X', 'AAA', ['C', 'LW']), player('Y', 'BBB', ['C']), player('W', 'BBB', ['LW'])];
     const league = { slots: slots({ C: ['C'], LW: ['LW'] }) };
-    const seats = expandSeats(league.slots);
     const opt = optimizeRange('2027-03-01', '2027-03-01', roster, league, s);
     expect(opt.usable).toBe(2);
+    expect(opt.manualDays).toBe(0);
 
-    // Put X into C (bumping Y), then idle Z (no game) into LW: a worse lineup.
-    let manual = lineupFromDay(opt.days[0]!);
-    manual = moveInLineup(manual, 'X', seats[0]!, seats, roster);
-    manual = moveInLineup(manual, 'Z', seats[1]!, seats, roster);
-    const edited = optimizeRange('2027-03-01', '2027-03-01', roster, league, s, { '2027-03-01': manual });
-    expect(edited.usable).toBe(1);
-    expect(edited.optimalUsable).toBe(2);
-    expect(edited.manualDays).toBe(1);
+    // Sitting Y: the optimizer refills around the choice (X and W still fill both spots).
+    const sat = optimizeRange('2027-03-01', '2027-03-01', roster, league, s, { '2027-03-01': sitPlayer(undefined, 'Y') });
+    expect(sat.usable).toBe(2);
+    const y = sat.days[0]!.players.find((p) => p.playerId === 'Y')!;
+    expect(y.seatKey).toBeUndefined();
+    expect(y).toMatchObject({ choice: 'sit', reason: { kind: 'sat' } });
+    expect(sat.manualDays).toBe(1);
 
-    // Reset = drop the override.
+    // Sitting X and W leaves LW empty: the user's choice wins, and the optimum is still reported.
+    const worse = optimizeRange('2027-03-01', '2027-03-01', roster, league, s, { '2027-03-01': { start: [], sit: ['X', 'W'] } });
+    expect(worse.usable).toBe(1);
+    expect(worse.optimalUsable).toBe(2);
+
+    // Reset = drop the date's choices.
     const reset = optimizeRange('2027-03-01', '2027-03-01', roster, league, s, {});
     expect(reset.usable).toBe(2);
     expect(reset.manualDays).toBe(0);
   });
 
-  it('manual lineups reject ineligible or IR placements', () => {
+  it('daily starts that cannot be honored are ignored and reported, never forced into an invalid lineup', () => {
     const s = sched([['2027-03-01', 'AAA', 'BBB']]);
-    const roster = [player('X', 'AAA', ['D']), player('Y', 'BBB', ['C'], true)];
+    const roster = [player('X', 'AAA', ['D']), player('Y', 'BBB', ['C'], true), player('Z', 'CCC', ['C']), player('V', 'AAA', ['C']), player('U', 'BBB', ['C'])];
     const seats = expandSeats(slots({ C: ['C'] }));
-    const day = optimizeDay('2027-03-01', roster, seats, s, { 'C#0': 'X' });
-    expect(day.usable).toBe(0);
-    expect(day.manualIssues).toHaveLength(1);
-    const day2 = optimizeDay('2027-03-01', roster, seats, s, { 'C#0': 'Y' });
-    expect(day2.manualIssues[0]).toMatch(/IR/);
+    const day = optimizeDay('2027-03-01', roster, seats, s, { start: ['X', 'Y', 'Z', 'V', 'U', 'gone'], sit: [] });
+    // X: no C slot. Y: on IR. Z: no game. gone: not on roster. U: the one C seat already holds V (started first).
+    expect(day.manualIssues).toHaveLength(5);
+    expect(day.manualIssues.join(' ')).toMatch(/IR/);
+    expect(day.manualIssues.join(' ')).toMatch(/no game/);
+    expect(day.seats.map((x) => x.playerId)).toEqual(['V']);
+    expect(day.usable).toBe(1);
+    expect(canStartTogether([roster[3]!, roster[4]!], seats)).toBe(false);
   });
 
   it('reports players with no compatible slot', () => {
@@ -213,5 +221,128 @@ describe('matching — brute-force cross-check', () => {
         seen.add(v);
       });
     }
+  });
+});
+
+describe('player priorities and daily choices', () => {
+  const s = sched([
+    ['2027-03-01', 'AAA', 'BBB'],
+    ['2027-03-01', 'CCC', 'DDD'],
+    ['2027-03-02', 'AAA', 'BBB'],
+    ['2027-03-02', 'CCC', 'DDD'],
+    ['2027-03-03', 'AAA', 'BBB'],
+    ['2027-03-03', 'CCC', 'DDD'],
+  ]);
+  const league = { slots: slots({ C: [2, ['C']], UTIL: [1, ['C', 'LW', 'RW', 'D']], G: [1, ['G']] }) };
+  const dates = ['2027-03-01', '2027-03-02', '2027-03-03'];
+  const base = (): LineupPlayer[] => [
+    player('c1', 'AAA', ['C']),
+    player('c2', 'BBB', ['C']),
+    player('c3', 'CCC', ['C']),
+    player('c4', 'DDD', ['C']), // four Cs for three C-capable spots
+    player('g1', 'AAA', ['G']),
+    player('g2', 'CCC', ['G']), // two goalies for one G spot
+  ];
+  const seatedOn = (days: Map<string, ReturnType<typeof optimizeDay>>, d: string) =>
+    days
+      .get(d)!
+      .seats.map((x) => x.playerId)
+      .filter(Boolean)
+      .sort();
+  const prefer = (roster: LineupPlayer[], ...ids: string[]) => roster.map((p) => (ids.includes(p.id) ? { ...p, preferred: true } : p));
+
+  it('a preferred player wins a contested spot over a lower-priority player, on every date', () => {
+    const plain = optimizeDates(dates, base(), league, s);
+    for (const d of dates) expect(seatedOn(plain, d)).toEqual(['c1', 'c2', 'c3', 'g1']); // roster order
+    const pref = optimizeDates(dates, prefer(base(), 'c4', 'g2'), league, s);
+    for (const d of dates) expect(seatedOn(pref, d)).toEqual(['c1', 'c2', 'c4', 'g2']);
+  });
+
+  it('priorities never break eligibility or capacity, and never cost a filled spot (random cross-check)', () => {
+    let seed = 99;
+    const rand = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+    const POS = ['C', 'LW', 'RW', 'D', 'G'] as const;
+    const teams = ['AAA', 'BBB', 'CCC', 'DDD'];
+    for (let t = 0; t < 300; t++) {
+      const roster = Array.from({ length: 4 + Math.floor(rand() * 10) }, (_, i) => {
+        const pos = POS.filter(() => rand() < 0.3);
+        return { ...player(`p${i}`, teams[Math.floor(rand() * 4)]!, pos.length ? [...pos] : ['C']), preferred: rand() < 0.4 };
+      });
+      const lg = { slots: slots({ C: [1 + Math.floor(rand() * 2), ['C']], W: [1, ['LW', 'RW']], D: [1, ['D']], U: [1, ['C', 'LW', 'RW', 'D']], G: [1, ['G']] }) };
+      const day = optimizeDay('2027-03-01', roster, expandSeats(lg.slots), s);
+      const unprioritized = optimizeDay('2027-03-01', roster.map((p) => ({ ...p, preferred: false })), expandSeats(lg.slots), s);
+      // Same number of filled spots as without priorities (the maximum).
+      expect(day.usable).toBe(unprioritized.usable);
+      expect(day.usable).toBe(day.optimalUsable);
+      // Every seated player has a game, fits the seat, and appears once.
+      const ids = day.seats.flatMap((x) => (x.playerId ? [x.playerId] : []));
+      expect(new Set(ids).size).toBe(ids.length);
+      for (const { seat, playerId } of day.seats) {
+        if (!playerId) continue;
+        const p = roster.find((r) => r.id === playerId)!;
+        expect(p.positions.some((x) => seat.accepts.includes(x))).toBe(true);
+        expect(day.players.find((x) => x.playerId === playerId)!.game).toBeDefined();
+      }
+      // At least as many preferred players seated as without priorities.
+      const prefCount = (d: typeof day) => d.seats.filter((x) => x.playerId && roster.find((r) => r.id === x.playerId)!.preferred).length;
+      expect(prefCount(day)).toBeGreaterThanOrEqual(prefCount(unprioritized));
+    }
+  });
+
+  it('starting a player bumps the lowest-priority competitor and fills the rest automatically', () => {
+    const roster = prefer(base(), 'c1');
+    const days = optimizeDates(dates, roster, league, s, { '2027-03-01': startPlayer(undefined, 'c4') });
+    // c4 is in; c1 (preferred) and c2 keep their spots; c3 is the lowest-priority C, so c3 sits.
+    expect(seatedOn(days, '2027-03-01')).toEqual(['c1', 'c2', 'c4', 'g1']);
+    expect(days.get('2027-03-01')!.players.find((p) => p.playerId === 'c4')!.choice).toBe('start');
+    expect(days.get('2027-03-01')!.manual).toBe(true);
+    expect(days.get('2027-03-02')!.manual).toBe(false);
+  });
+
+  it('a choice on one date is kept when another date is edited, and other dates are unaffected', () => {
+    let manual: Record<string, DayOverride> = { '2027-03-01': startPlayer(undefined, 'c4') };
+    const first = optimizeDates(dates, base(), league, s, manual);
+    manual = { ...manual, '2027-03-02': sitPlayer(manual['2027-03-02'], 'g1') };
+    const second = optimizeDates(dates, base(), league, s, manual);
+    expect(seatedOn(second, '2027-03-01')).toEqual(seatedOn(first, '2027-03-01'));
+    expect(seatedOn(second, '2027-03-01')).toContain('c4');
+    expect(seatedOn(second, '2027-03-02')).toEqual(['c1', 'c2', 'c3', 'g2']);
+    expect(seatedOn(second, '2027-03-03')).toEqual(seatedOn(first, '2027-03-03'));
+  });
+
+  it('changing priorities updates automatic dates but keeps manual choices', () => {
+    const manual = { '2027-03-01': { start: ['c3'], sit: ['c1'] } };
+    const before = optimizeDates(dates, base(), league, s, manual);
+    expect(seatedOn(before, '2027-03-01')).toEqual(['c2', 'c3', 'c4', 'g1']);
+    const after = optimizeDates(dates, prefer(base(), 'c1', 'g2'), league, s, manual);
+    // Manual date: c3 still started, c1 still sat (despite now being preferred); the free spot and G follow priorities.
+    expect(seatedOn(after, '2027-03-01')).toEqual(['c2', 'c3', 'c4', 'g2']);
+    // Automatic dates follow the new priorities.
+    expect(seatedOn(after, '2027-03-02')).toEqual(['c1', 'c2', 'c3', 'g2']);
+  });
+
+  it('resetting a date restores its priority-aware optimized lineup', () => {
+    const roster = prefer(base(), 'c4');
+    const edited = optimizeDates(dates, roster, league, s, { '2027-03-01': sitPlayer(undefined, 'c4') });
+    expect(seatedOn(edited, '2027-03-01')).not.toContain('c4');
+    const reset = optimizeDates(dates, roster, league, s, {});
+    expect(seatedOn(reset, '2027-03-01')).toEqual(seatedOn(reset, '2027-03-02'));
+    expect(seatedOn(reset, '2027-03-01')).toContain('c4');
+  });
+
+  it('player and overall counts match the final lineups, including daily choices, for skaters and goalies', () => {
+    const roster = [...prefer(base(), 'g2'), player('irC', 'BBB', ['C'], true)];
+    const manual = { '2027-03-01': { start: ['c4', 'g1'], sit: [] }, '2027-03-02': { start: [], sit: ['c2'] } };
+    const r = optimizeRange('2027-03-01', '2027-03-03', roster, league, s, manual);
+    const seatedCount = (id: string) => r.days.filter((d) => d.seats.some((x) => x.playerId === id)).length;
+    for (const t of r.players) {
+      expect(t.usable).toBe(seatedCount(t.playerId));
+      expect(t.scheduled).toBe(3); // every team here plays all three dates
+    }
+    expect(r.players.find((p) => p.playerId === 'g1')!.usable).toBe(1); // started on 03-01 only
+    expect(r.players.find((p) => p.playerId === 'g2')!.usable).toBe(2); // preferred on the other dates
+    expect(r.players.find((p) => p.playerId === 'irC')!.usable).toBe(0);
+    expect(r.usable).toBe(r.days.reduce((n, d) => n + d.seats.filter((x) => x.playerId).length, 0));
+    expect(r.goalieUsable).toBe(3);
   });
 });

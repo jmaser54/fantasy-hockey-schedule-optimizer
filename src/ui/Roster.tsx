@@ -4,7 +4,7 @@ import { matchName, parseRosterText, type MatchResult } from '../domain/rosterIm
 import { canUseIr, describeIssue, effectivePositions, validateRoster } from '../domain/roster.ts';
 import type { Player, Position, RosterEntry } from '../domain/types.ts';
 import { useApp } from './context.ts';
-import { PlayerSearch, PosBadges, PosToggles, isInactive, usePlayerIndex } from './common.tsx';
+import { PlayerSearch, PosBadges, PosToggles, PreferredToggle, isInactive, usePlayerIndex } from './common.tsx';
 
 interface ReviewLine {
   raw: string;
@@ -304,7 +304,7 @@ function RosterTable() {
               return (
                 <tr key={e.playerId}>
                   <td>
-                    {p.name} {isInactive(p) && <span className="badge warn" title="Not on an NHL active roster at the last data refresh (e.g. in the minors). Their team's games are still counted.">Not on NHL Roster</span>}
+                    <PreferredToggle id={e.playerId} name={p.name} preferred={!!e.preferred} /> {p.name} {isInactive(p) && <span className="badge warn" title="Not on an NHL active roster at the last data refresh (e.g. in the minors). Their team's games are still counted.">Not on NHL Roster</span>}
                     {p.stints && p.stints.length > 1 && (
                       <span className="badge" title={p.stints.map((s) => `${s.team}${s.from ? ` from ${s.from}` : ''}${s.to ? ` to ${s.to}` : ''}`).join('; ')}>
                         Traded
@@ -360,7 +360,7 @@ function RosterTable() {
         </table>
       </div>
       <div className="panel-body small muted" style={{ borderTop: '1px solid var(--border)' }}>
-        <PosBadges positions={['C', 'LW', 'RW', 'D', 'G']} /> toggles change eligibility for your league. IR players don’t count toward the roster limit and never play.
+        <PosBadges positions={['C', 'LW', 'RW', 'D', 'G']} /> toggles change eligibility for your league. ★ marks preferred players, who get lineup spots first when more players have games than there are spots. IR players don’t count toward the roster limit and never play.
       </div>
       <div className="clear-roster">
         <button
