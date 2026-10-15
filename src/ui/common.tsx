@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { buildPlayerIndex, searchPlayers } from '../domain/rosterImport.ts';
 import { POSITIONS, POSITION_LABELS, type Player, type Position } from '../domain/types.ts';
 import { useApp } from './context.ts';
@@ -107,4 +107,39 @@ export function isInactive(p: Player | undefined): boolean {
 export function Delta({ value }: { value: number }) {
   if (value === 0) return <span className="muted">+0</span>;
   return <span className={value > 0 ? 'delta-pos' : 'delta-neg'}>{value > 0 ? `+${value}` : `−${-value}`}</span>;
+}
+
+/** Small "i" button that reveals an explanation on hover, or on click/tap (mobile, keyboard). */
+export function InfoTip({ label, children }: { label: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState(false);
+  const id = useId();
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('touchstart', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('touchstart', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+  return (
+    <span className="infotip" ref={ref} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+      <button type="button" className="info-btn" aria-label={label} aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
+        i
+      </button>
+      {(open || hover) && (
+        <span id={id} role="tooltip" className="infotip-pop">
+          {children}
+        </span>
+      )}
+    </span>
+  );
 }

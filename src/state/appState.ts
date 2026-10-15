@@ -26,7 +26,6 @@ export interface AppState {
   /** Manual lineups by date, for the saved roster. */
   manual: Record<ISODate, ManualLineup>;
   scenario: Scenario;
-  scenarioHistory: Scenario[];
 }
 
 export const EMPTY_SCENARIO: Scenario = { drops: [], adds: [] };
@@ -42,7 +41,6 @@ export function initialState(): AppState {
     customPlayers: [],
     manual: {},
     scenario: EMPTY_SCENARIO,
-    scenarioHistory: [],
   };
 }
 
@@ -60,8 +58,6 @@ export type Action =
   | { type: 'setManual'; date: ISODate; lineup: ManualLineup | null }
   | { type: 'clearManual'; dates?: ISODate[] }
   | { type: 'scenario'; scenario: Scenario }
-  | { type: 'scenarioUndo' }
-  | { type: 'scenarioReset' }
   | { type: 'scenarioApply' };
 
 /** Remove a player from every manual lineup (other placements stay as the user set them). */
@@ -142,18 +138,11 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, manual };
     }
     case 'scenario':
-      return { ...state, scenario: action.scenario, scenarioHistory: [...state.scenarioHistory, state.scenario].slice(-50) };
-    case 'scenarioUndo': {
-      const prev = state.scenarioHistory[state.scenarioHistory.length - 1];
-      if (!prev) return state;
-      return { ...state, scenario: prev, scenarioHistory: state.scenarioHistory.slice(0, -1) };
-    }
-    case 'scenarioReset':
-      return hasScenario(state.scenario) ? { ...state, scenario: EMPTY_SCENARIO, scenarioHistory: [...state.scenarioHistory, state.scenario] } : state;
+      return { ...state, scenario: action.scenario };
     case 'scenarioApply': {
       let manual = state.manual;
       for (const id of state.scenario.drops) manual = withoutPlayerInManual(manual, id);
-      return { ...state, roster: proposedRoster(state), manual, scenario: EMPTY_SCENARIO, scenarioHistory: [] };
+      return { ...state, roster: proposedRoster(state), manual, scenario: EMPTY_SCENARIO };
     }
   }
 }
@@ -259,15 +248,13 @@ export function deserialize(raw: string | null): { state: AppState; notice?: str
     customPlayers: loadCustomPlayers(data.customPlayers),
     manual: loadManual(data.manual),
     scenario: loadScenario(data.scenario),
-    scenarioHistory: [],
   };
   if (state.selection !== 'all' && state.selection !== 'custom' && !state.periods.some((p) => p.id === state.selection)) state.selection = 'all';
   return { state, ...(problems.length ? { notice: `Some saved ${problems.join(' and ')} couldn't be restored and were reset to defaults.` } : {}) };
 }
 
 export function serialize(state: AppState): string {
-  const { scenarioHistory: _ignored, ...rest } = state;
-  return JSON.stringify(rest);
+  return JSON.stringify(state);
 }
 
 export function loadFromStorage(): { state: AppState; notice?: string } {

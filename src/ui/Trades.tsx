@@ -4,7 +4,7 @@ import { describeIssue, toLineupPlayers, validateRoster } from '../domain/roster
 import type { Player } from '../domain/types.ts';
 import { hasScenario, proposedRoster } from '../state/appState.ts';
 import { useApp } from './context.ts';
-import { Delta, PlayerSearch, PosBadges } from './common.tsx';
+import { Delta, InfoTip, PlayerSearch, PosBadges } from './common.tsx';
 
 /**
  * Before/after comparison of optimal usable games. Both sides use the
@@ -36,7 +36,7 @@ export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
         Then try adding, dropping or swapping players here without changing it.
         <div style={{ marginTop: 8 }}>
           <button className="btn primary" onClick={onGoRoster}>
-            Add players
+            Add Players
           </button>
         </div>
       </div>
@@ -63,24 +63,18 @@ export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
     <div className="stack">
       <section className="panel">
         <div className="panel-head">
-          <h2>Usable games: current vs proposed</h2>
-          <button className="btn small" disabled={state.scenarioHistory.length === 0} onClick={() => dispatch({ type: 'scenarioUndo' })}>
-            Undo
-          </button>
-          <button className="btn small" disabled={!hasScenario(scenario)} onClick={() => dispatch({ type: 'scenarioReset' })}>
-            Back to current roster
-          </button>
+          <h2>Usable Games: Current vs Proposed</h2>
           <button
             className="btn small primary"
             disabled={!hasScenario(scenario)}
             onClick={() => {
               if (confirm('Replace your saved roster with the proposed one?')) {
                 dispatch({ type: 'scenarioApply' });
-                toast('Proposed roster saved');
+                toast('Roster saved.');
               }
             }}
           >
-            Make this my roster
+            Update Roster
           </button>
         </div>
         <div className="table-wrap">
@@ -127,7 +121,7 @@ export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
         <section className="panel">
           <div className="panel-head">
             <h2>Drop</h2>
-            <span className="small muted">Usable in {selected.name}</span>
+            <UsableLabel period={selected.name} />
           </div>
           <div className="panel-body">
             {state.roster.map((e) => {
@@ -152,7 +146,7 @@ export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
         <section className="panel">
           <div className="panel-head">
             <h2>Add</h2>
-            <span className="small muted">Usable in {selected.name}</span>
+            <UsableLabel period={selected.name} />
           </div>
           <div className="panel-body stack" style={{ gap: 8 }}>
             <PlayerSearch exclude={exclude} placeholder="Find a player to add…" onPick={(p) => set({ ...scenario, adds: [...scenario.adds, p.id] })} />
@@ -176,5 +170,22 @@ export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
         </section>
       </div>
     </div>
+  );
+}
+
+/** Header for the per-player usable/scheduled counts in the selected period. */
+function UsableLabel({ period }: { period: string }) {
+  return (
+    <span className="usable-label small muted">
+      Usable / Scheduled · <b>{period}</b>
+      <InfoTip label="What Usable / Scheduled means">
+        <b>Usable / Scheduled</b>
+        <span>
+          The first number is the number of games in which this player can be included in your optimized daily lineup. The second number is the number of games their NHL
+          team has scheduled during the selected period.
+        </span>
+        <span>A player may have fewer usable games than scheduled games because your roster has limited lineup spots. Players on IR currently have zero usable games.</span>
+      </InfoTip>
+    </span>
   );
 }

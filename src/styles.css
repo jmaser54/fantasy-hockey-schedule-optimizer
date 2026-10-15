@@ -277,7 +277,21 @@ textarea { min-height: 140px; resize: vertical; font-family: inherit; }
 .pos-toggles button[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: #fff; }
 .counts { display: flex; gap: 12px; font-size: 13px; }
 .counts b.over { color: var(--bad); }
-.clear-roster { display: flex; justify-content: flex-end; }
+.clear-roster { display: flex; justify-content: flex-end; padding: 10px 14px; border-top: 1px solid var(--border); }
+.usable-label { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.usable-label b { color: var(--text); font-weight: 600; }
+.infotip { position: relative; display: inline-flex; }
+.info-btn {
+  width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--muted); background: var(--surface); color: var(--muted);
+  font: italic 700 10px/1 Georgia, serif; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+}
+.info-btn:hover, .info-btn[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); }
+.infotip-pop {
+  position: absolute; top: calc(100% + 6px); right: -6px; z-index: 30; width: min(290px, 80vw);
+  display: grid; gap: 6px; padding: 10px 12px; text-align: left; white-space: normal;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 15%); font-size: 12px; line-height: 1.45; font-weight: 400;
+}
 
 /* Trades */
 .trade-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }

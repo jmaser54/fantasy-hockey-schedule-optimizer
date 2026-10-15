@@ -66,7 +66,7 @@ function TeamRankings() {
       ]
     : [{ key: 'games', label: 'Games', title: `Games in ${selected.name} (${formatShort(selected.start)} – ${formatShort(selected.end)})` }];
   const summaryCol: Column | null =
-    !isAll && allWindow ? { key: 'summary', label: 'Full playoffs', title: 'All rounds combined, for context. Not limited to the selected range.' } : null;
+    !isAll && allWindow ? { key: 'summary', label: 'Full Playoffs', title: 'All rounds combined, for context. Not limited to the selected range.' } : null;
   const numericKeys = [...gameCols.map((c) => c.key), 'light', ...(summaryCol ? ['summary'] : []), 'mine'];
 
   const defaultSort: SortState = { key: 'games', dir: 'desc' };
@@ -115,7 +115,7 @@ function TeamRankings() {
       <GamesPerNight />
       <section className="panel">
         <div className="panel-head">
-          <h2>NHL team schedules</h2>
+          <h2>NHL Team Schedules</h2>
           <span className="small muted">
             {selected.name}, {formatShort(selected.start)} – {formatShort(selected.end)}. Click a team for its dates.
           </span>
@@ -129,9 +129,9 @@ function TeamRankings() {
                 {gameCols.map((c) => (
                   <Fragment key={c.key}>{sortTh(c.key, c.label, c.title, c.key === 'games' ? 'col-selected' : '')}</Fragment>
                 ))}
-                {sortTh('light', 'Light-night games', `Games on nights with 8 or fewer NHL games, in ${selected.name}. Those games compete with fewer of your other players for lineup spots`)}
+                {sortTh('light', 'Light-Night Games', `Games on nights with 8 or fewer NHL games, in ${selected.name}. Those games compete with fewer of your other players for lineup spots`)}
                 {summaryCol && sortTh(summaryCol.key, summaryCol.label, summaryCol.title, 'summary-col')}
-                {sortTh('mine', 'Your players', 'Players on your roster from this team. Click a count to see them')}
+                {sortTh('mine', 'Your Players', 'Players on your roster from this team. Click a count to see them')}
               </tr>
             </thead>
             <tbody>
@@ -214,7 +214,7 @@ function GamesPerNight() {
   return (
     <section className="panel">
       <div className="panel-head">
-        <h2>Games per night</h2>
+        <h2>Games per Night</h2>
         <span className="legend">
           <span>
             <i style={{ background: 'var(--good)' }} />
@@ -295,7 +295,7 @@ function TeamPlayers({ team, players }: { team: TeamId; players: RosteredPlayer[
   return (
     <div className="team-players">
       <b>
-        Your players on {team} ({players.length})
+        Your Players on {team} ({players.length})
       </b>
       {players.map((p) => (
         <span key={p.id} className="team-player">
@@ -333,7 +333,7 @@ function ScheduleGrid() {
   return (
     <section className="panel">
       <div className="panel-head">
-        <h2>Schedule grid</h2>
+        <h2>Schedule Grid</h2>
         <span className="small muted">
           {selected.name}, {formatShort(selected.start)} – {formatShort(selected.end)}. Opponent shown on game days; “@” means away.
         </span>

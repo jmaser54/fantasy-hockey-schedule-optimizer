@@ -79,9 +79,9 @@ try {
   if (!/NHL data/.test(chip)) fail(`unexpected data status: ${chip}`);
   console.log(`rankings OK: ${rows} teams; status "${chip.trim()}"`);
 
-  await page.getByRole('tab', { name: /Roster/ }).click();
+  await page.getByRole('tab', { name: /^Roster/ }).click();
   if (!(await page.getByLabel('Paste player names').isVisible())) fail('paste mode is not the default on the roster page');
-  await page.getByRole('tab', { name: 'Search players' }).click();
+  await page.getByRole('tab', { name: 'Search Players' }).click();
   await page.getByLabel('Search players').fill('Connor McDavid');
   await page.locator('.suggest li').first().click();
   await page.getByRole('tab', { name: 'Lineup' }).click();
@@ -90,7 +90,7 @@ try {
   console.log(`lineup OK: "${heading}"`);
 
   await page.reload({ waitUntil: 'networkidle' });
-  await page.getByRole('tab', { name: /Roster/ }).click();
+  await page.getByRole('tab', { name: /^Roster/ }).click();
   const counts = await page.locator('.counts').innerText();
   if (!/Roster\s+1\//.test(counts)) fail(`roster not restored after reload: ${counts}`);
   console.log('persistence OK');
@@ -101,7 +101,7 @@ try {
   await page.reload({ waitUntil: 'load' });
   await page.waitForSelector('table tbody tr');
   await page.waitForTimeout(3000);
-  for (const tab of [/Roster/, 'Lineup', 'Trade Lab']) {
+  for (const tab of [/^Roster/, 'Lineup', 'Trade Lab']) {
     await page.getByRole('tab', { name: tab }).click();
     await page.waitForTimeout(1500);
   }

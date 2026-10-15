@@ -31,9 +31,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="panel modal" role="dialog" aria-modal="true" aria-label="League settings">
+      <div className="panel modal" role="dialog" aria-modal="true" aria-label="League Settings">
         <div className="panel-head">
-          <h2>League settings</h2>
+          <h2>League Settings</h2>
           <button className="btn ghost" onClick={onClose}>
             Cancel
           </button>
@@ -44,24 +44,24 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         <div className="panel-body">
           <div className="form-row">
             <div className="field">
-              <label htmlFor="rs">Roster size (excluding IR)</label>
+              <label htmlFor="rs">Roster Size (excluding IR)</label>
               <input id="rs" type="number" min={1} value={Number.isNaN(league.rosterSize) ? '' : league.rosterSize} onChange={(e) => setLeague({ ...league, rosterSize: num(e.target.value) })} />
             </div>
             <div className="field">
-              <label htmlFor="ir">IR slots (extra)</label>
+              <label htmlFor="ir">IR Slots (extra)</label>
               <input id="ir" type="number" min={0} value={Number.isNaN(league.irSlots) ? '' : league.irSlots} onChange={(e) => setLeague({ ...league, irSlots: num(e.target.value) })} />
             </div>
             <div className="field">
-              <label htmlFor="ire">Who can use IR</label>
+              <label htmlFor="ire">Who Can Use IR</label>
               <select id="ire" value={league.irEligibility} onChange={(e) => setLeague({ ...league, irEligibility: e.target.value as LeagueConfig['irEligibility'] })}>
-                <option value="injured">Injured players only</option>
-                <option value="any">Any player</option>
+                <option value="injured">Injured Players Only</option>
+                <option value="any">Any Player</option>
               </select>
             </div>
           </div>
 
           <h3>
-            Daily lineup slots <span className="muted small">({activeSlotCount(league)} active · {Math.max(0, league.rosterSize - activeSlotCount(league))} bench)</span>
+            Daily Lineup Slots <span className="muted small">({activeSlotCount(league)} active · {Math.max(0, league.rosterSize - activeSlotCount(league))} bench)</span>
           </h3>
           {league.slots.map((s, i) => (
             <div className="slot-row" key={i}>
@@ -80,10 +80,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               className="btn small"
               onClick={() => setLeague({ ...league, slots: [...league.slots, { id: `slot-${Date.now().toString(36)}`, label: 'F', count: 1, accepts: ['C', 'LW', 'RW'] }] })}
             >
-              Add slot
+              Add Slot
             </button>
             <button className="btn small ghost" onClick={() => setLeague(structuredClone(DEFAULT_LEAGUE))}>
-              Restore defaults
+              Restore Defaults
             </button>
           </div>
           {leagueErrors.length > 0 && (
@@ -92,7 +92,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             </div>
           )}
 
-          <h3>Fantasy playoff rounds</h3>
+          <h3>Fantasy Playoff Rounds</h3>
           {periods.map((p, i) => (
             <div className="period-row" key={p.id}>
               <input aria-label="Round name" value={p.name} onChange={(e) => updPeriod(i, { name: e.target.value })} />
@@ -112,10 +112,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 setPeriods([...periods, { id: `p-${Date.now().toString(36)}`, name: `Round ${periods.length + 1}`, start: last?.end ?? '2027-03-01', end: last?.end ?? '2027-03-07' }]);
               }}
             >
-              Add round
+              Add Round
             </button>
             <button className="btn small ghost" onClick={() => setPeriods(structuredClone(DEFAULT_PERIODS))}>
-              Restore 2027 defaults
+              Restore 2027 Defaults
             </button>
           </div>
         </div>

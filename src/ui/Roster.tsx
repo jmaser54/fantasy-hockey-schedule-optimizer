@@ -54,17 +54,17 @@ export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
           </span>
           {state.roster.length > 0 && (
             <button className="btn small" onClick={onGoLineup}>
-              View lineup →
+              View Lineup →
             </button>
           )}
         </div>
         <div className="panel-body stack">
           <div className="mode-switch" role="tablist" aria-label="Add players">
             <button role="tab" aria-selected={mode === 'paste'} onClick={() => setMode('paste')}>
-              Paste roster
+              Paste Roster
             </button>
             <button role="tab" aria-selected={mode === 'search'} onClick={() => setMode('search')}>
-              Search players
+              Search Players
             </button>
           </div>
           {mode === 'search' && (
@@ -101,26 +101,11 @@ export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
 
       {state.roster.length === 0 ? (
         <div className="panel empty">
-          <strong>No players yet</strong>
+          <strong>No Players Yet</strong>
           Search above, or paste your whole roster from your league site.
         </div>
       ) : (
         <RosterTable />
-      )}
-      {state.roster.length > 0 && (
-        <div className="clear-roster">
-          <button
-            className="btn small"
-            onClick={() => {
-              if (confirm(`Remove all ${state.roster.length} players from your roster? This can’t be undone. Your league settings are kept.`)) {
-                dispatch({ type: 'clearRoster' });
-                toast('Roster cleared');
-              }
-            }}
-          >
-            Clear roster
-          </button>
-        </div>
       )}
     </div>
   );
@@ -152,7 +137,7 @@ function PasteBox({ onParsed, autoFocus }: { onParsed: (lines: ReviewLine[]) => 
       />
       <div>
         <button className="btn primary" disabled={!text.trim()} onClick={parse}>
-          Match names
+          Match Names
         </button>
       </div>
     </div>
@@ -184,7 +169,7 @@ function ImportReview(props: {
           Back
         </button>
         <button className="btn primary" disabled={chosen.length === 0} onClick={() => props.onDone(chosen)}>
-          Add {chosen.length} player{chosen.length === 1 ? '' : 's'}
+          Add {chosen.length} Player{chosen.length === 1 ? '' : 's'}
         </button>
       </div>
       <div className="panel-body review">
@@ -210,7 +195,7 @@ function ImportReview(props: {
                 ))}
                 {r.status !== 'matched' && (
                   <button className="opt" onClick={() => setCreating(creating === i ? null : i)}>
-                    Add as new player…
+                    Add as New Player…
                   </button>
                 )}
               </span>
@@ -248,7 +233,7 @@ function CustomPlayerForm(props: { initialName: string; initialTeam?: string; te
         <input value={name} onChange={(e) => setName(e.target.value)} />
       </div>
       <div className="field">
-        <label>NHL team</label>
+        <label>NHL Team</label>
         <select value={team} onChange={(e) => setTeam(e.target.value)}>
           <option value="">Choose…</option>
           {props.teams.map((t) => (
@@ -259,7 +244,7 @@ function CustomPlayerForm(props: { initialName: string; initialTeam?: string; te
         </select>
       </div>
       <div className="field">
-        <label>Eligible positions</label>
+        <label>Eligible Positions</label>
         <PosToggles value={positions} onChange={setPositions} />
       </div>
       <div>
@@ -276,7 +261,7 @@ function CustomPlayerForm(props: { initialName: string; initialTeam?: string; te
 }
 
 function RosterTable() {
-  const { state, dispatch, resolve, selected, data, teams } = useApp();
+  const { state, dispatch, resolve, selected, data, teams, toast } = useApp();
   const rows = state.roster.map((e) => ({ e, p: resolve(e.playerId) }));
   const order = (r: { e: RosterEntry; p?: Player }) => (r.e.onIr ? 2 : r.p && effectivePositions(r.e, r.p).every((x) => x === 'G') ? 1 : 0);
   rows.sort((a, b) => order(a) - order(b));
@@ -303,7 +288,7 @@ function RosterTable() {
                 return (
                   <tr key={e.playerId}>
                     <td colSpan={5}>
-                      <span className="badge bad">Missing from player data</span> <span className="muted small">{e.playerId}</span>
+                      <span className="badge bad">Missing from Player Data</span> <span className="muted small">{e.playerId}</span>
                     </td>
                     <td>
                       <button className="icon-btn" onClick={() => dispatch({ type: 'removePlayer', id: e.playerId })} aria-label="Remove">
@@ -319,7 +304,7 @@ function RosterTable() {
               return (
                 <tr key={e.playerId}>
                   <td>
-                    {p.name} {isInactive(p) && <span className="badge warn" title="Not on an NHL active roster at the last data refresh (e.g. in the minors). Their team's games are still counted.">Not on NHL roster</span>}
+                    {p.name} {isInactive(p) && <span className="badge warn" title="Not on an NHL active roster at the last data refresh (e.g. in the minors). Their team's games are still counted.">Not on NHL Roster</span>}
                     {p.stints && p.stints.length > 1 && (
                       <span className="badge" title={p.stints.map((s) => `${s.team}${s.from ? ` from ${s.from}` : ''}${s.to ? ` to ${s.to}` : ''}`).join('; ')}>
                         Traded
@@ -376,6 +361,19 @@ function RosterTable() {
       </div>
       <div className="panel-body small muted" style={{ borderTop: '1px solid var(--border)' }}>
         <PosBadges positions={['C', 'LW', 'RW', 'D', 'G']} /> toggles change eligibility for your league. IR players don’t count toward the roster limit and never play.
+      </div>
+      <div className="clear-roster">
+        <button
+          className="btn small"
+          onClick={() => {
+            if (confirm(`Remove all ${state.roster.length} players from your roster? This can’t be undone. Your league settings are kept.`)) {
+              dispatch({ type: 'clearRoster' });
+              toast('Roster cleared');
+            }
+          }}
+        >
+          Clear Roster
+        </button>
       </div>
     </section>
   );

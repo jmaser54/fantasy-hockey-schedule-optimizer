@@ -19,7 +19,7 @@ export function LineupView({ onGoRoster }: { onGoRoster: () => void }) {
       <div className="panel empty">
         <strong>Add your roster to see usable games</strong>
         <button className="btn primary" onClick={onGoRoster} style={{ marginTop: 8 }}>
-          Add players
+          Add Players
         </button>
       </div>
     );
@@ -42,7 +42,7 @@ export function LineupView({ onGoRoster }: { onGoRoster: () => void }) {
                 Manual lineup on {manualDates.length} day{manualDates.length === 1 ? '' : 's'} · optimal {summary.optimalUsable}
               </span>
               <button className="btn small" onClick={() => dispatch({ type: 'clearManual', dates: manualDates })}>
-                Reset to optimal
+                Reset to Optimal
               </button>
             </>
           )}
@@ -211,7 +211,7 @@ function LineupGrid(props: { window: Window; players: LineupPlayer[]; selectedDa
         </tbody>
         <tfoot>
           <tr>
-            <td className="sticky small">Usable / your games</td>
+            <td className="sticky small">Usable / Your Games</td>
             {props.window.dates.map((d) => {
               const day = days.get(d)!;
               return (
@@ -301,7 +301,7 @@ function DayDetail({ day, onNav, dates }: { day: DayResult; onNav: (d: ISODate) 
           <>
             <span className="badge manual">Manual{day.usable < day.optimalUsable ? ` · optimal ${day.optimalUsable}` : ''}</span>
             <button className="btn small" onClick={() => dispatch({ type: 'setManual', date: day.date, lineup: null })}>
-              Reset day to optimal
+              Reset Day to Optimal
             </button>
           </>
         ) : (

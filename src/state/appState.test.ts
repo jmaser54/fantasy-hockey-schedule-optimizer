@@ -31,18 +31,12 @@ describe('hypothetical transactions (spec case 11)', () => {
     expect(usable(s.roster)).toBe(2);
     expect(usable(proposedRoster(s))).toBe(3);
 
-    // Undo returns to the empty scenario; the original is intact throughout.
-    s = reducer(s, { type: 'scenarioUndo' });
+    // Removing the drop and the add individually returns the proposal to the current roster.
+    s = reducer(s, { type: 'scenario', scenario: { drops: [], adds: [] } });
     expect(proposedRoster(s)).toEqual(before);
 
-    // Redo, then reset, then undo the reset.
+    // Update Roster makes the proposal the roster and clears the scenario.
     s = reducer(s, { type: 'scenario', scenario: { drops: ['b'], adds: ['c'] } });
-    s = reducer(s, { type: 'scenarioReset' });
-    expect(proposedRoster(s)).toEqual(before);
-    s = reducer(s, { type: 'scenarioUndo' });
-    expect(s.scenario).toEqual({ drops: ['b'], adds: ['c'] });
-
-    // Applying makes the proposal the roster.
     s = reducer(s, { type: 'scenarioApply' });
     expect(s.roster.map((e) => e.playerId)).toEqual(['a', 'c']);
     expect(s.scenario).toEqual({ drops: [], adds: [] });
@@ -69,7 +63,7 @@ describe('persistence (spec case 12)', () => {
     s = reducer(s, { type: 'scenario', scenario: { drops: ['a'], adds: ['c'] } });
     const { state, notice } = deserialize(serialize(s));
     expect(notice).toBeUndefined();
-    expect({ ...state, scenarioHistory: [] }).toEqual({ ...s, scenarioHistory: [] });
+    expect(state).toEqual(s);
   });
 
   it('recovers from malformed or partial data without losing valid parts', () => {
@@ -107,7 +101,6 @@ describe('roster operations', () => {
     expect(cleared.custom).toBe(s.custom);
     expect(cleared.selection).toBe(s.selection);
     expect(cleared.customPlayers).toBe(s.customPlayers);
-    expect(cleared.scenarioHistory).toBe(s.scenarioHistory);
     // Persisted state reloads empty.
     expect(deserialize(serialize(cleared)).state.roster).toEqual([]);
   });

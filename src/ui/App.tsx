@@ -14,7 +14,7 @@ import { SettingsModal } from './Settings.tsx';
 import { TradesView } from './Trades.tsx';
 
 const TABS = [
-  { id: 'rankings', label: 'Team schedules' },
+  { id: 'rankings', label: 'Team Schedules' },
   { id: 'roster', label: 'Roster' },
   { id: 'lineup', label: 'Lineup' },
   { id: 'trades', label: 'Trade Lab' },
@@ -79,8 +79,8 @@ export function App() {
             <div className="brand">
               Playoff <span>Planner</span>
             </div>
-            <button className="settings-btn" onClick={() => setSettingsOpen(true)} aria-label="League settings" title="Review and adjust your league settings">
-              <span aria-hidden="true">⚙︎</span> League settings
+            <button className="settings-btn" onClick={() => setSettingsOpen(true)} aria-label="League Settings" title="Review and adjust your league settings">
+              <span aria-hidden="true">⚙︎</span> League Settings
             </button>
           </div>
           <nav className="tabs" role="tablist">
@@ -154,7 +154,7 @@ function Ready(props: { state: AppCtx['state']; dispatch: AppCtx['dispatch']; da
     const rounds = state.periods.map((p) => ({ ...p, dates: eachDate(p.start, p.end) }));
     const all = [...new Set(rounds.flatMap((r) => r.dates))].sort();
     const out: Window[] = [...rounds];
-    if (all.length) out.push({ id: 'all', name: 'Full playoffs', start: all[0]!, end: all[all.length - 1]!, dates: all });
+    if (all.length) out.push({ id: 'all', name: 'Full Playoffs', start: all[0]!, end: all[all.length - 1]!, dates: all });
     out.push({ id: 'custom', name: 'Custom', start: state.custom.start, end: state.custom.end, dates: eachDate(state.custom.start, state.custom.end) });
     return out;
   }, [state.periods, state.custom]);
