@@ -277,6 +277,7 @@ textarea { min-height: 140px; resize: vertical; font-family: inherit; }
 .pos-toggles button[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: #fff; }
 .counts { display: flex; gap: 12px; font-size: 13px; }
 .counts b.over { color: var(--bad); }
+.clear-roster { display: flex; justify-content: flex-end; }
 
 /* Trades */
 .trade-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }

@@ -107,6 +107,21 @@ export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
       ) : (
         <RosterTable />
       )}
+      {state.roster.length > 0 && (
+        <div className="clear-roster">
+          <button
+            className="btn small"
+            onClick={() => {
+              if (confirm(`Remove all ${state.roster.length} players from your roster? This can’t be undone. Your league settings are kept.`)) {
+                dispatch({ type: 'clearRoster' });
+                toast('Roster cleared');
+              }
+            }}
+          >
+            Clear roster
+          </button>
+        </div>
+      )}
     </div>
   );
 }

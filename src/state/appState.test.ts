@@ -88,6 +88,31 @@ describe('persistence (spec case 12)', () => {
 });
 
 describe('roster operations', () => {
+  it('clear roster removes every player and nothing else, and stays cleared after reload', () => {
+    let s = reducer(initialState(), { type: 'addPlayers', ids: ['a', 'b', 'c'] });
+    s = reducer(s, { type: 'updateEntry', id: 'b', patch: { onIr: true, markedInjured: true } });
+    s = reducer(s, { type: 'setLeague', league: { ...s.league, rosterSize: 18, irSlots: 3 } });
+    s = reducer(s, { type: 'setCustom', start: '2027-03-01', end: '2027-03-10' });
+    s = reducer(s, { type: 'addCustomPlayer', player: { id: 'custom-1', name: 'New Guy', team: 'TOR', positions: ['C'], eligibilitySource: 'user' } });
+    s = reducer(s, { type: 'setManual', date: '2027-03-01', lineup: { 'C#0': 'a' } });
+    s = reducer(s, { type: 'scenario', scenario: { drops: ['a'], adds: ['z'] } });
+
+    const cleared = reducer(s, { type: 'clearRoster' });
+    expect(cleared.roster).toEqual([]);
+    expect(cleared.manual).toEqual({});
+    expect(cleared.scenario).toEqual({ drops: [], adds: ['z'] });
+    // Unrelated data is untouched.
+    expect(cleared.league).toBe(s.league);
+    expect(cleared.periods).toBe(s.periods);
+    expect(cleared.custom).toBe(s.custom);
+    expect(cleared.selection).toBe(s.selection);
+    expect(cleared.customPlayers).toBe(s.customPlayers);
+    expect(cleared.scenarioHistory).toBe(s.scenarioHistory);
+    // Persisted state reloads empty.
+    expect(deserialize(serialize(cleared)).state.roster).toEqual([]);
+  });
+
+
   it('moving a player to IR removes them from manual lineups; league changes keep the roster', () => {
     let s = reducer(initialState(), { type: 'addPlayers', ids: ['a', 'b', 'a'] });
     expect(s.roster).toHaveLength(2);

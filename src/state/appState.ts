@@ -126,7 +126,9 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'addCustomPlayer':
       return { ...state, customPlayers: [...state.customPlayers.filter((p) => p.id !== action.player.id), action.player] };
     case 'clearRoster':
-      return { ...state, roster: [], manual: {}, scenario: EMPTY_SCENARIO, scenarioHistory: [] };
+      // removePlayer for everyone: manual lineups and trade drops only reference roster
+      // players, so they go too. Settings, rounds, custom players and trade adds are kept.
+      return { ...state, roster: [], manual: {}, scenario: { ...state.scenario, drops: [] } };
     case 'setManual': {
       const manual = { ...state.manual };
       if (action.lineup) manual[action.date] = action.lineup;
