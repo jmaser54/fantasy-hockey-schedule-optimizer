@@ -36,7 +36,7 @@ Fantasy hockey playoff optimizer: maximizes **usable player-games** (not points)
 
 - ESPN slot ids and team ids are inferred from the data, not hardcoded. The inferred mapping was 0=C, 1=LW, 2=RW, 3=F, 4=D, 5=G, 6=UTIL, 7=Bench, 8=IR, with all 32 teams mapped. If inference isn't clean, ESPN is rejected and NHL positions are used instead.
 - The ESPN↔NHL match uses exact names first, then a loose name (ignoring middle initials) plus team plus position. Real case handled: VAN has two Elias Petterssons (C and D), and ESPN calls the D "Elias N. Pettersson".
-- ESPN-only players (about 810, mostly minor-leaguers) are included and flagged "Not on NHL roster".
+- ESPN-only players (about 810: prospects, minor-leaguers, injured non-roster players and some retired players) are included so they can be added, using ESPN's team and positions. The data marks them `inactive` (not on any NHL current roster at the last refresh); the app does not display this.
 - **Traded players:** each refresh compares against the previous snapshot. A team change closes the old stint the day before and opens the new one on the refresh date. Every date resolves to exactly one team, so a traded player's games are never double-counted.
 - **Refresh:** `.github/workflows/refresh-data.yml` runs daily and on pipeline changes, then commits the validated snapshot. If any validation fails, nothing is written.
 - **Dates:** `YYYY-MM-DD` strings in the NHL's Eastern game-date convention. There's no local-time `Date` arithmetic.
