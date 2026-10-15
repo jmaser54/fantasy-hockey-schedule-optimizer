@@ -117,7 +117,7 @@ function TeamRankings() {
         <div className="panel-head">
           <h2>NHL Team Schedules</h2>
           <span className="small muted">
-            {selected.name}, {formatShort(selected.start)} – {formatShort(selected.end)}. Click a team for its dates.
+            {selected.name}, {formatShort(selected.start)} – {formatShort(selected.end)}. Click a team to view game dates.
           </span>
         </div>
         <div className="table-wrap">
