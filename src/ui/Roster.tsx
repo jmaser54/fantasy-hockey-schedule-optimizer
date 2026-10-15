@@ -4,7 +4,7 @@ import { matchName, parseRosterText, type MatchResult } from '../domain/rosterIm
 import { describeIssue, effectivePositions, validateRoster } from '../domain/roster.ts';
 import type { Player, Position, RosterEntry } from '../domain/types.ts';
 import { useApp } from './context.ts';
-import { PlayerSearch, PosBadges, PosToggles, PreferredToggle, isInactive, usePlayerIndex } from './common.tsx';
+import { PlayerSearch, PosBadges, PosToggles, PreferredToggle, usePlayerIndex } from './common.tsx';
 
 interface ReviewLine {
   raw: string;
@@ -189,7 +189,6 @@ function ImportReview(props: {
                 {candidates.map((c) => (
                   <button key={c.id} className="opt" aria-pressed={l.choice === c.id} onClick={() => set(i, l.choice === c.id ? null : c.id)}>
                     {c.name} · {c.team} · {c.positions.join('/')}
-                    {isInactive(c) ? ' · not on NHL roster' : ''}
                     {props.onRoster.has(c.id) ? ' (on roster)' : ''}
                   </button>
                 ))}

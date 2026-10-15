@@ -90,7 +90,6 @@ export function PlayerSearch(props: {
               <PosBadges positions={p.positions} />
               <span className="meta">
                 {teams.get(p.team)?.name ?? p.team}
-                {(p as { inactive?: boolean }).inactive ? ' · not on NHL roster' : ''}
               </span>
             </li>
           ))}
@@ -98,10 +97,6 @@ export function PlayerSearch(props: {
       )}
     </div>
   );
-}
-
-export function isInactive(p: Player | undefined): boolean {
-  return Boolean(p && (p as { inactive?: boolean }).inactive);
 }
 
 export function Delta({ value }: { value: number }) {
