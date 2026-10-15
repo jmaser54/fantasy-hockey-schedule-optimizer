@@ -313,7 +313,6 @@ function ScheduleGrid() {
   const gamesIn = useGamesInWindow();
   const byTeam = useRosterByTeam();
   const [sort, setSort] = useState<SortState>({ key: 'team', dir: 'asc' });
-  const [hoverCol, setHoverCol] = useState<number | null>(null);
   const rows = sortTeamRows(
     data.teams.map((t) => ({ team: t.id, values: { games: gamesIn(t.id, selected) } })),
     sort,
@@ -335,20 +334,30 @@ function ScheduleGrid() {
       <div className="panel-head">
         <h2>Schedule Grid</h2>
         <span className="small muted">
-          {selected.name}, {formatShort(selected.start)} – {formatShort(selected.end)}. Opponent shown on game days; “@” means away.
+          {selected.name}, {formatShort(selected.start)} – {formatShort(selected.end)}
         </span>
       </div>
       <div className="grid-wrap">
-        <table className="sgrid" onMouseLeave={() => setHoverCol(null)}>
+        <table className="sgrid">
           <thead>
+            <tr className="nightly">
+              <th className="sticky" title="NHL games scheduled league-wide on each date">
+                NHL Games
+              </th>
+              {selected.dates.map((d, i) => (
+                <th key={d} className={weekday(d) === 'Mon' && i > 0 ? 'wk' : ''} title={`${weekday(d)} ${formatShort(d)} · ${data.schedule.gamesOn(d).length} NHL games`}>
+                  {data.schedule.gamesOn(d).length}
+                </th>
+              ))}
+              <th />
+            </tr>
             <tr>
               {head('team', 'Team', 'sticky')}
               {selected.dates.map((d, i) => (
                 <th
                   key={d}
-                  className={`dcol ${weekday(d) === 'Mon' && i > 0 ? 'wk' : ''} ${hoverCol === i ? 'col-hl' : ''}`}
+                  className={`dcol ${weekday(d) === 'Mon' && i > 0 ? 'wk' : ''}`}
                   title={`${weekday(d)} ${formatShort(d)} · ${data.schedule.gamesOn(d).length} NHL games`}
-                  onMouseEnter={() => setHoverCol(i)}
                 >
                   {weekday(d)}
                   <br />
@@ -369,9 +378,8 @@ function ScheduleGrid() {
                   return (
                     <td
                       key={d}
-                      className={`${c ? 'game' : 'off'} ${weekday(d) === 'Mon' && i > 0 ? 'wk' : ''} ${hoverCol === i ? 'col-hl' : ''}`}
+                      className={`${c ? 'game' : 'off'} ${weekday(d) === 'Mon' && i > 0 ? 'wk' : ''}`}
                       title={c ? `${formatShort(d)}: ${c.home ? 'vs' : 'at'} ${c.opponent}` : `${formatShort(d)}: no game`}
-                      onMouseEnter={() => setHoverCol(i)}
                     >
                       {c?.label ?? ''}
                     </td>
