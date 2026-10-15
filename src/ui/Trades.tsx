@@ -7,7 +7,7 @@ import { useApp } from './context.ts';
 import { Delta, InfoTip, PlayerSearch, PosBadges } from './common.tsx';
 
 /**
- * Before/after comparison of optimal usable games. Both sides use the
+ * Before/after comparison of games that fit optimal lineups. Both sides use the
  * optimizer's best daily lineups, so manual lineup edits don't skew it.
  */
 export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
@@ -63,7 +63,7 @@ export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
     <div className="stack">
       <section className="panel">
         <div className="panel-head">
-          <h2>Usable Games: Current vs Proposed</h2>
+          <h2>Games in Your Lineup: Current vs Proposed</h2>
           <button
             className="btn small primary"
             disabled={!hasScenario(scenario)}
@@ -173,18 +173,18 @@ export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
   );
 }
 
-/** Header for the per-player usable/scheduled counts in the selected period. */
+/** Header for the per-player in-lineup/scheduled counts in the selected period. */
 function UsableLabel({ period }: { period: string }) {
   return (
     <span className="usable-label small muted">
-      Usable / Scheduled · <b>{period}</b>
-      <InfoTip label="What Usable / Scheduled means">
-        <b>Usable / Scheduled</b>
+      In Lineup / Scheduled · <b>{period}</b>
+      <InfoTip label="What In Lineup / Scheduled means">
+        <b>In Lineup / Scheduled</b>
         <span>
           The first number is the number of games in which this player can be included in your optimized daily lineup. The second number is the number of games their NHL
           team has scheduled during the selected period.
         </span>
-        <span>A player may have fewer usable games than scheduled games because your roster has limited lineup spots. Players on IR currently have zero usable games.</span>
+        <span>A player may have fewer games accommodated in your lineup than their team has scheduled because your roster has limited lineup spots. Players on IR currently have zero games accommodated in the lineup.</span>
       </InfoTip>
     </span>
   );

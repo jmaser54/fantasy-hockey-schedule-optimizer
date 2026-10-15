@@ -17,7 +17,7 @@ export function LineupView({ onGoRoster }: { onGoRoster: () => void }) {
   if (state.roster.length === 0) {
     return (
       <div className="panel empty">
-        <strong>Add your roster to see usable games</strong>
+        <strong>Add your roster to see how many games fit your lineup</strong>
         <button className="btn primary" onClick={onGoRoster} style={{ marginTop: 8 }}>
           Add Players
         </button>
@@ -34,7 +34,7 @@ export function LineupView({ onGoRoster }: { onGoRoster: () => void }) {
       <section className="panel">
         <div className="panel-head">
           <h2>
-            {selected.name}: {summary.usable} usable of {summary.scheduled} games
+            {selected.name}: {summary.usable} of {summary.scheduled} scheduled games fit your lineup
           </h2>
           {manualDates.length > 0 && (
             <>
@@ -70,10 +70,10 @@ function SummaryCards() {
           <button key={w.id} className="card" aria-pressed={w.id === selected.id} onClick={() => dispatch({ type: 'select', selection: w.id })}>
             <div className="label">{w.name}</div>
             <div className="big">
-              {s.usable} <small>/ {s.scheduled}</small>
+              {s.usable} <small>of {s.scheduled}</small>
             </div>
+            <div className="sub" title="Scheduled games that fit your optimized daily lineup">games fit your lineup</div>
             <div className="sub">
-              usable games ·{' '}
               <span title={`Goalie game opportunities / goalie lineup slots, summed over ${w.name}'s days. See the Goalies row in the grid for each day.`}>
                 Goalies {g.available}/{g.capacity}
               </span>
@@ -165,8 +165,8 @@ function LineupGrid(props: { window: Window; players: LineupPlayer[]; selectedDa
                 {Number(d.slice(8))}
               </th>
             ))}
-            <th className="tot" title="Usable / scheduled games">
-              Used
+            <th className="tot" title="Games in your lineup / games scheduled for this player's team">
+              In Lineup
             </th>
           </tr>
         </thead>
@@ -211,11 +211,11 @@ function LineupGrid(props: { window: Window; players: LineupPlayer[]; selectedDa
         </tbody>
         <tfoot>
           <tr>
-            <td className="sticky small">Usable / Your Games</td>
+            <td className="sticky small">In Lineup / Your Games</td>
             {props.window.dates.map((d) => {
               const day = days.get(d)!;
               return (
-                <td key={d} title={`${day.usable} of ${day.scheduled} usable${day.manual ? ` (optimal ${day.optimalUsable})` : ''}`} style={day.manual ? { color: 'var(--accent)' } : undefined}>
+                <td key={d} title={`${day.usable} of ${day.scheduled} games fit your lineup${day.manual ? ` (optimal ${day.optimalUsable})` : ''}`} style={day.manual ? { color: 'var(--accent)' } : undefined}>
                   {day.scheduled ? `${day.usable}` : '·'}
                   <br />
                   <span style={{ fontWeight: 400 }}>{day.scheduled || ''}</span>
@@ -295,7 +295,7 @@ function DayDetail({ day, onNav, dates }: { day: DayResult; onNav: (d: ISODate) 
           </button>
         </div>
         <h2>
-          {weekday(day.date)} {formatShort(day.date)} · {day.usable} of {day.scheduled} games used
+          {weekday(day.date)} {formatShort(day.date)} · {day.usable} of {day.scheduled} games fit your lineup
         </h2>
         {day.manual ? (
           <>

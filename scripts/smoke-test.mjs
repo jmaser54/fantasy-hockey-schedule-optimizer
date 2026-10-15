@@ -86,7 +86,7 @@ try {
   await page.locator('.suggest li').first().click();
   await page.getByRole('tab', { name: 'Lineup' }).click();
   const heading = await page.locator('.panel-head h2').first().innerText();
-  if (!/usable of \d+ games/.test(heading)) fail(`lineup heading unexpected: ${heading}`);
+  if (!/of \d+ scheduled games fit your lineup/.test(heading)) fail(`lineup heading unexpected: ${heading}`);
   console.log(`lineup OK: "${heading}"`);
 
   await page.reload({ waitUntil: 'networkidle' });
