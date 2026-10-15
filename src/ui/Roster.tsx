@@ -303,7 +303,7 @@ function RosterTable() {
               return (
                 <tr key={e.playerId}>
                   <td>
-                    <PreferredToggle id={e.playerId} name={p.name} preferred={!!e.preferred} /> {p.name} {isInactive(p) && <span className="badge warn" title="Not on an NHL active roster at the last data refresh (e.g. in the minors). Their team's games are still counted.">Not on NHL Roster</span>}
+                    <PreferredToggle id={e.playerId} name={p.name} preferred={!!e.preferred} /> {p.name}
                     {p.stints && p.stints.length > 1 && (
                       <span className="badge" title={p.stints.map((s) => `${s.team}${s.from ? ` from ${s.from}` : ''}${s.to ? ` to ${s.to}` : ''}`).join('; ')}>
                         Traded
