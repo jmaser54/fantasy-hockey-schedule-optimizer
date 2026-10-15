@@ -3,7 +3,7 @@
  * opportunities vs active lineup capacity, split into skaters and goalies.
  * Read-only; this does not affect optimization or assignments.
  */
-import type { DayResult, LineupPlayer } from './optimizer.ts';
+import type { DayResult, LineupPlayer, PlayerTotals } from './optimizer.ts';
 import type { LineupSlot, Position } from './types.ts';
 
 const SKATER_POSITIONS: readonly Position[] = ['C', 'LW', 'RW', 'D'];
@@ -53,15 +53,36 @@ export function dailyGroupCounts(day: DayResult, roster: readonly LineupPlayer[]
   return { skaters: { available: skaters, capacity: cap.skaters }, goalies: { available: goalies, capacity: cap.goalies } };
 }
 
-/** Sum daily counts over a set of days (e.g. a playoff round): total opportunities vs total slot-days. */
-export function sumGroupCounts(days: readonly DayResult[], roster: readonly LineupPlayer[], slots: readonly LineupSlot[]): DailyGroupCounts {
-  const total: DailyGroupCounts = { skaters: { available: 0, capacity: 0 }, goalies: { available: 0, capacity: 0 } };
-  for (const day of days) {
-    const c = dailyGroupCounts(day, roster, slots);
-    total.skaters.available += c.skaters.available;
-    total.skaters.capacity += c.skaters.capacity;
-    total.goalies.available += c.goalies.available;
-    total.goalies.capacity += c.goalies.capacity;
+/** In-lineup and scheduled player games for one group of rows. */
+export interface LineupTotal {
+  /** Player-games assigned a lineup seat by the daily lineups. */
+  inLineup: number;
+  /** Player-games scheduled for the same players (one per player per game). */
+  scheduled: number;
+}
+
+/** Same grouping as the lineup grid: a player is a goalie only if every listed position is G. */
+export const isGoalieOnly = (p: LineupPlayer) => p.positions.length > 0 && p.positions.every((x) => x === 'G');
+
+/**
+ * Period summary by group, built from the per-player In Lineup / Scheduled
+ * totals so it always equals the sum of the grid rows. Players on IR can't be
+ * in a lineup and are left out of both groups, matching the grid's Skaters and
+ * Goalies sections and the daily "In Lineup / Your Games" counts.
+ */
+export function lineupGroupTotals(
+  totals: readonly PlayerTotals[],
+  roster: readonly LineupPlayer[],
+): { skaters: LineupTotal; goalies: LineupTotal; all: LineupTotal } {
+  const byId = new Map(roster.map((p) => [p.id, p]));
+  const out = { skaters: { inLineup: 0, scheduled: 0 }, goalies: { inLineup: 0, scheduled: 0 }, all: { inLineup: 0, scheduled: 0 } };
+  for (const t of totals) {
+    const p = byId.get(t.playerId);
+    if (!p || p.onIr) continue;
+    for (const g of [isGoalieOnly(p) ? out.goalies : out.skaters, out.all]) {
+      g.inLineup += t.usable;
+      g.scheduled += t.scheduled;
+    }
   }
-  return total;
+  return out;
 }

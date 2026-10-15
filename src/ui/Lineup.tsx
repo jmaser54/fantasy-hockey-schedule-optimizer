@@ -3,7 +3,7 @@ import { formatShort, weekday } from '../domain/dates.ts';
 import { expandSeats, lineupFromDay, moveInLineup, type DayResult, type LineupPlayer, type UnusedReason } from '../domain/optimizer.ts';
 import { opponent } from '../domain/schedule.ts';
 import type { ISODate } from '../domain/types.ts';
-import { dailyGroupCounts, sumGroupCounts } from '../domain/capacity.ts';
+import { dailyGroupCounts, lineupGroupTotals } from '../domain/capacity.ts';
 import { useApp, type Window } from './context.ts';
 import { PosBadges } from './common.tsx';
 
@@ -57,25 +57,25 @@ export function LineupView({ onGoRoster }: { onGoRoster: () => void }) {
 }
 
 function SummaryCards() {
-  const { windows, selected, dispatch, summarizeWindow, state, lineupPlayers } = useApp();
+  const { windows, selected, dispatch, summarizeWindow, lineupPlayers } = useApp();
   const shown = windows.filter((w) => w.id !== 'custom' || selected.id === 'custom');
   return (
     <div className="cards">
       {shown.map((w) => {
         const s = summarizeWindow(w);
-        const pct = s.scheduled ? Math.round((s.usable / s.scheduled) * 100) : 0;
-        // Display only: goalie game opportunities vs goalie slot-days, summed over the window's days.
-        const g = sumGroupCounts(s.days, lineupPlayers, state.league.slots).goalies;
+        const t = lineupGroupTotals(s.players, lineupPlayers);
+        const pct = t.all.scheduled ? Math.round((t.all.inLineup / t.all.scheduled) * 100) : 0;
         return (
           <button key={w.id} className="card" aria-pressed={w.id === selected.id} onClick={() => dispatch({ type: 'select', selection: w.id })}>
             <div className="label">{w.name}</div>
             <div className="big">
-              {s.usable} <small>of {s.scheduled}</small>
+              {t.all.inLineup} <small>of {t.all.scheduled}</small>
             </div>
-            <div className="sub" title="Scheduled games that fit your optimized daily lineup">games fit your lineup</div>
+            <div className="sub" title="Scheduled games of your non-IR players that fit your optimized daily lineup">games fit your lineup</div>
             <div className="sub">
-              <span title={`Goalie game opportunities / goalie lineup slots, summed over ${w.name}'s days. See the Goalies row in the grid for each day.`}>
-                Goalies {g.available}/{g.capacity}
+              <span title={`In lineup / scheduled games in ${w.name}, summed from the player rows (players on IR excluded)`}>
+                <span style={{ whiteSpace: 'nowrap' }}>Skaters {t.skaters.inLineup}/{t.skaters.scheduled}</span> ·{' '}
+                <span style={{ whiteSpace: 'nowrap' }}>Goalies {t.goalies.inLineup}/{t.goalies.scheduled}</span>
               </span>
               {s.manualDays ? <> · <span className="badge manual">manual</span></> : null}
             </div>
