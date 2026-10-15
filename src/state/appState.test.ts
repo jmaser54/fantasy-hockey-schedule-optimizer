@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { optimizeRange } from '../domain/optimizer.ts';
-import { toLineupPlayers } from '../domain/roster.ts';
+import { toLineupPlayers, validateRoster } from '../domain/roster.ts';
+import { DEFAULT_LEAGUE } from '../domain/league.ts';
 import { player as lp, sched, slots } from '../domain/testUtils.ts';
 import type { Player } from '../domain/types.ts';
 import { deserialize, initialState, proposedRoster, reducer, serialize, type AppState } from './appState.ts';
@@ -56,12 +57,26 @@ describe('hypothetical transactions (spec case 11)', () => {
     s = reducer(s, { type: 'clearManual', dates: ['2027-03-01'] });
     expect(Object.keys(s.manual)).toEqual(['2027-03-20']);
   });
+
+  it('Trade Lab: a proposed roster keeps IR players valid without any injury mark', () => {
+    const roster = [
+      { playerId: 'a', onIr: false },
+      { playerId: 'b', onIr: true },
+      { playerId: 'c', onIr: true },
+    ];
+    const ps = new Map([['a', P('a', 'AAA')], ['b', P('b', 'BBB')], ['c', P('c', 'CCC')], ['d', P('d', 'AAA')]]);
+    const proposed = proposedRoster({ roster, scenario: { drops: ['a'], adds: ['d'] } });
+    expect(proposed).toEqual([{ playerId: 'b', onIr: true }, { playerId: 'c', onIr: true }, { playerId: 'd', onIr: false }]);
+    expect(validateRoster(proposed, ps, DEFAULT_LEAGUE)).toEqual([]);
+    // The IR slot limit still applies.
+    expect(validateRoster(proposed, ps, { ...DEFAULT_LEAGUE, irSlots: 1 })).toEqual([{ kind: 'over-ir', count: 2, limit: 1 }]);
+  });
 });
 
 describe('persistence (spec case 12)', () => {
   it('round-trips the saved state', () => {
     let s = reducer(initialState(), { type: 'addPlayers', ids: ['a', 'b'] });
-    s = reducer(s, { type: 'updateEntry', id: 'b', patch: { onIr: true, markedInjured: true } });
+    s = reducer(s, { type: 'updateEntry', id: 'b', patch: { onIr: true } });
     s = reducer(s, { type: 'setLeague', league: { ...s.league, rosterSize: 18, irSlots: 3 } });
     s = reducer(s, { type: 'setCustom', start: '2027-03-01', end: '2027-03-10' });
     s = reducer(s, { type: 'setManual', date: '2027-03-01', override: { start: ['a'], sit: ['b'] } });
@@ -94,6 +109,37 @@ describe('persistence (spec case 12)', () => {
     expect(deserialize(old).state.manual).toEqual({ '2027-03-05': { start: ['a', 'g'], sit: [] } });
   });
 
+  it('loads saves from before IR simplification: the old injured mark and IR rule are dropped, everything else is kept', () => {
+    const legacy = {
+      version: 1,
+      league: { rosterSize: 18, irSlots: 3, irEligibility: 'injured', slots: initialState().league.slots },
+      selection: 'all',
+      roster: [
+        { playerId: 'a', onIr: false, preferred: true, positionsOverride: ['C', 'LW'] },
+        { playerId: 'b', onIr: true, markedInjured: true },
+        { playerId: 'c', onIr: true }, // on IR without the old mark (previously warned)
+        { playerId: 'd', onIr: false, markedInjured: true }, // active with a leftover mark
+      ],
+      manual: { '2027-03-05': { start: ['a'], sit: ['d'] } },
+      scenario: { drops: ['d'], adds: ['e'] },
+    };
+    const { state, notice } = deserialize(JSON.stringify(legacy));
+    expect(notice).toBeUndefined();
+    expect(state.league).toEqual({ rosterSize: 18, irSlots: 3, slots: initialState().league.slots });
+    expect(state.roster).toEqual([
+      { playerId: 'a', onIr: false, preferred: true, positionsOverride: ['C', 'LW'] },
+      { playerId: 'b', onIr: true },
+      { playerId: 'c', onIr: true },
+      { playerId: 'd', onIr: false },
+    ]);
+    expect(state.manual).toEqual(legacy.manual);
+    expect(state.scenario).toEqual(legacy.scenario);
+    // Saving again writes no legacy fields.
+    expect(serialize(state)).not.toMatch(/markedInjured|irEligibility/);
+    // 'Any Player' saves load the same way.
+    expect(deserialize(JSON.stringify({ ...legacy, league: { ...legacy.league, irEligibility: 'any' } })).state.league).toEqual(state.league);
+  });
+
   it('starts fresh with nothing saved', () => {
     expect(deserialize(null)).toEqual({ state: initialState() });
   });
@@ -102,7 +148,7 @@ describe('persistence (spec case 12)', () => {
 describe('roster operations', () => {
   it('clear roster removes every player and nothing else, and stays cleared after reload', () => {
     let s = reducer(initialState(), { type: 'addPlayers', ids: ['a', 'b', 'c'] });
-    s = reducer(s, { type: 'updateEntry', id: 'b', patch: { onIr: true, markedInjured: true } });
+    s = reducer(s, { type: 'updateEntry', id: 'b', patch: { onIr: true } });
     s = reducer(s, { type: 'setLeague', league: { ...s.league, rosterSize: 18, irSlots: 3 } });
     s = reducer(s, { type: 'setCustom', start: '2027-03-01', end: '2027-03-10' });
     s = reducer(s, { type: 'addCustomPlayer', player: { id: 'custom-1', name: 'New Guy', team: 'TOR', positions: ['C'], eligibilitySource: 'user' } });

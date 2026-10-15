@@ -66,14 +66,12 @@ export interface LineupSlot {
   accepts: Position[];
 }
 
-export type IrEligibility = 'any' | 'injured';
 
 export interface LeagueConfig {
   /** Total roster capacity, excluding IR. */
   rosterSize: number;
   /** IR slots, in addition to rosterSize. */
   irSlots: number;
-  irEligibility: IrEligibility;
   /** Active daily lineup slots. Everyone else non-IR is on the bench. */
   slots: LineupSlot[];
 }
@@ -91,8 +89,6 @@ export interface RosterEntry {
   onIr: boolean;
   /** User-specified eligibility override; replaces the data-source positions. */
   positionsOverride?: Position[];
-  /** User says this player is injured (for IR eligibility). */
-  markedInjured?: boolean;
   /** Gets lineup spots first when players compete for them (stored only when true). */
   preferred?: boolean;
 }

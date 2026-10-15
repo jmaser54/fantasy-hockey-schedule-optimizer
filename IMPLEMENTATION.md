@@ -32,7 +32,7 @@ Fantasy hockey playoff optimizer: maximizes **usable player-games** (not points)
 | Schedule | NHL `club-schedule-season/{team}/20262027` | 1,344 games, Sep 29 → Apr 10, exactly 84 per team, each game cross-checked in both teams' lists |
 | Players, current team | NHL `roster/{team}/current` | 785 players |
 | Fantasy eligibility | ESPN `lm-api-reads.fantasy.espn.com/.../fhl/seasons/2027/players?view=players_wl` (unofficial) | 1,705 players; 777 matched to NHL records |
-| Injury status | none available | ESPN's public pool has no injury fields, so users mark players injured themselves |
+| Injury status | none available | Not needed: IR is the user's own roster designation (Active/IR on the Roster page) |
 
 - ESPN slot ids and team ids are inferred from the data, not hardcoded. The inferred mapping was 0=C, 1=LW, 2=RW, 3=F, 4=D, 5=G, 6=UTIL, 7=Bench, 8=IR, with all 32 teams mapped. If inference isn't clean, ESPN is rejected and NHL positions are used instead.
 - The ESPN↔NHL match uses exact names first, then a loose name (ignoring middle initials) plus team plus position. Real case handled: VAN has two Elias Petterssons (C and D), and ESPN calls the D "Elias N. Pettersson".
@@ -83,7 +83,7 @@ Fantasy hockey playoff optimizer: maximizes **usable player-games** (not points)
 ## Known issues and risks
 - **This dev container cannot reach the NHL or ESPN APIs** (network policy). Data is fetched only by GitHub Actions, or locally once those hosts are allowed.
 - NHL and ESPN endpoints are undocumented. Parsers fail loudly and keep the last good snapshot.
-- ESPN gives no injury data, so the "injured only" IR rule relies on the user marking players injured (choosing IR does this, labeled as user-provided).
+- IR is whatever the user sets on the Roster page. A player set to IR uses an IR slot and never plays; no injury status or separate mark is required. Only the league's IR slot count is enforced. Older saves' injured marks and "Who Can Use IR" setting are ignored on load.
 - A trade's effective date is the first refresh that observes it (up to about 1 day late).
 - ESPN's pool contains a duplicate "Andrew Agozzino" (two ESPN ids, both minor-league). Both are shown; paste import flags the name as ambiguous.
 - The scheduled (cron) refresh and Pages deploys run only on the repository's default branch, currently `claude/practical-faraday-ti8p02`. If a `main` branch becomes the default later, merge this branch into it first; the workflows need no changes.

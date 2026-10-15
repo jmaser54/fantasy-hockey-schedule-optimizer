@@ -86,12 +86,11 @@ describe('league + roster validation', () => {
     expect(validateRoster(entries, players, smaller).map((i) => i.kind)).toEqual(['over-roster', 'over-ir']);
   });
 
-  it('IR eligibility follows the configured rule', () => {
-    const players = new Map([['h', mk('h')]]);
-    const entries = [{ playerId: 'h', onIr: true }];
-    expect(validateRoster(entries, players, DEFAULT_LEAGUE)[0]?.kind).toBe('ir-ineligible');
-    expect(validateRoster([{ ...entries[0]!, markedInjured: true }], players, DEFAULT_LEAGUE)).toEqual([]);
-    expect(validateRoster(entries, players, { ...DEFAULT_LEAGUE, irEligibility: 'any' })).toEqual([]);
+  it('IR is the user\'s selection: no injury status or mark is needed, only the IR slot limit applies', () => {
+    const players = new Map([['h', mk('h')], ['k', mk('k')], ['m', mk('m')]]); // none injured in the data
+    const entries = [{ playerId: 'h', onIr: true }, { playerId: 'k', onIr: true }];
+    expect(validateRoster(entries, players, DEFAULT_LEAGUE)).toEqual([]);
+    expect(validateRoster([...entries, { playerId: 'm', onIr: true }], players, DEFAULT_LEAGUE)).toEqual([{ kind: 'over-ir', count: 3, limit: 2 }]);
   });
 });
 

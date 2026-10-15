@@ -168,7 +168,6 @@ function loadLeague(v: unknown): LeagueConfig | undefined {
   const league: LeagueConfig = {
     rosterSize: Number(v.rosterSize),
     irSlots: Number(v.irSlots),
-    irEligibility: v.irEligibility === 'any' ? 'any' : 'injured',
     slots: v.slots.filter(isObj).map((s) => ({
       id: String(s.id),
       label: String(s.label ?? s.id),
@@ -196,7 +195,6 @@ function loadRoster(v: unknown): RosterEntry[] | undefined {
       playerId: e.playerId,
       onIr: e.onIr === true,
       ...(isPositions(e.positionsOverride) && e.positionsOverride.length ? { positionsOverride: e.positionsOverride } : {}),
-      ...(e.markedInjured === true ? { markedInjured: true } : {}),
       ...(e.preferred === true ? { preferred: true } : {}),
     });
   }

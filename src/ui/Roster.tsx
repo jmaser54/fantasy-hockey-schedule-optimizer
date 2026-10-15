@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { playerGames } from '../domain/schedule.ts';
 import { matchName, parseRosterText, type MatchResult } from '../domain/rosterImport.ts';
-import { canUseIr, describeIssue, effectivePositions, validateRoster } from '../domain/roster.ts';
+import { describeIssue, effectivePositions, validateRoster } from '../domain/roster.ts';
 import type { Player, Position, RosterEntry } from '../domain/types.ts';
 import { useApp } from './context.ts';
 import { PlayerSearch, PosBadges, PosToggles, PreferredToggle, isInactive, usePlayerIndex } from './common.tsx';
@@ -300,7 +300,6 @@ function RosterTable() {
               }
               const pos = effectivePositions(e, p);
               const games = playerGames(data.schedule, p, selected.start, selected.end).filter((g) => dates.has(g.date)).length;
-              const irAllowed = canUseIr(e, p, state.league);
               return (
                 <tr key={e.playerId}>
                   <td>
@@ -333,20 +332,11 @@ function RosterTable() {
                     <select
                       value={e.onIr ? 'ir' : 'active'}
                       aria-label={`${p.name} status`}
-                      onChange={(ev) => {
-                        const toIr = ev.target.value === 'ir';
-                        // Under an injured-only IR rule, choosing IR records that you consider the player injured.
-                        dispatch({ type: 'updateEntry', id: e.playerId, patch: { onIr: toIr, ...(toIr && !irAllowed ? { markedInjured: true } : {}) } });
-                      }}
+                      onChange={(ev) => dispatch({ type: 'updateEntry', id: e.playerId, patch: { onIr: ev.target.value === 'ir' } })}
                     >
                       <option value="active">Active</option>
                       <option value="ir">IR</option>
                     </select>
-                    {e.markedInjured && (
-                      <button className="btn ghost small" title="You marked this player injured" onClick={() => dispatch({ type: 'updateEntry', id: e.playerId, patch: { markedInjured: false } })}>
-                        injured ✕
-                      </button>
-                    )}
                   </td>
                   <td>
                     <button className="icon-btn" onClick={() => dispatch({ type: 'removePlayer', id: e.playerId })} aria-label={`Remove ${p.name}`} title="Remove">

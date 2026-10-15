@@ -51,13 +51,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               <label htmlFor="ir">IR Slots (extra)</label>
               <input id="ir" type="number" min={0} value={Number.isNaN(league.irSlots) ? '' : league.irSlots} onChange={(e) => setLeague({ ...league, irSlots: num(e.target.value) })} />
             </div>
-            <div className="field">
-              <label htmlFor="ire">Who Can Use IR</label>
-              <select id="ire" value={league.irEligibility} onChange={(e) => setLeague({ ...league, irEligibility: e.target.value as LeagueConfig['irEligibility'] })}>
-                <option value="injured">Injured Players Only</option>
-                <option value="any">Any Player</option>
-              </select>
-            </div>
           </div>
 
           <h3>

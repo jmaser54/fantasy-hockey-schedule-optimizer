@@ -13,7 +13,6 @@ export const DEFAULT_SLOTS: LineupSlot[] = [
 export const DEFAULT_LEAGUE: LeagueConfig = {
   rosterSize: 22,
   irSlots: 2,
-  irEligibility: 'injured',
   slots: DEFAULT_SLOTS,
 };
 
