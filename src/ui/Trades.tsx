@@ -177,7 +177,10 @@ export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
 function UsableLabel({ period }: { period: string }) {
   return (
     <span className="usable-label small muted">
-      In Lineup / Scheduled · <b>{period}</b>
+      <span className="usable-label-text">
+        <span>In Lineup / Scheduled</span>
+        <b>{period}</b>
+      </span>
       <InfoTip label="What In Lineup / Scheduled means">
         <b>In Lineup / Scheduled</b>
         <span>

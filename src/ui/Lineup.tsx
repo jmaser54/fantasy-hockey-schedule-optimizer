@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { formatShort, weekday } from '../domain/dates.ts';
 import { canStartTogether, expandSeats, sitPlayer, startPlayer, type DayResult, type LineupPlayer, type UnusedReason } from '../domain/optimizer.ts';
 import { opponent } from '../domain/schedule.ts';
@@ -10,9 +10,30 @@ import { PosBadges, PreferredToggle } from './common.tsx';
 export function LineupView({ onGoRoster }: { onGoRoster: () => void }) {
   const { state, selected, lineupPlayers, dispatch, summarizeWindow, days } = useApp();
   const [day, setDay] = useState<ISODate | null>(null);
+  const editorRef = useRef<HTMLElement>(null);
+  const scrollToEditor = useRef(false);
   useEffect(() => {
     if (day && !selected.dates.includes(day)) setDay(null);
   }, [selected, day]);
+  // Bring the day editor into view, below the sticky header.
+  const showEditor = () => {
+    if (!editorRef.current) return;
+    const header = document.querySelector('.topbar')?.getBoundingClientRect().height ?? 0;
+    const top = editorRef.current.getBoundingClientRect().top + window.scrollY - header - 8;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top, behavior: reduce ? 'auto' : 'smooth' });
+  };
+  // A date picked in the grid opens its editor in view (arrow navigation inside the editor doesn't scroll).
+  useEffect(() => {
+    if (!day || !scrollToEditor.current) return;
+    scrollToEditor.current = false;
+    showEditor();
+  }, [day]);
+  const pickDay = (d: ISODate) => {
+    const next = d === day ? null : d;
+    scrollToEditor.current = next !== null;
+    setDay(next);
+  };
 
   if (state.roster.length === 0) {
     return (
@@ -60,10 +81,21 @@ export function LineupView({ onGoRoster }: { onGoRoster: () => void }) {
           )}
         </div>
         <Legend />
-        <LineupGrid window={selected} players={lineupPlayers} selectedDay={day} onSelectDay={(d) => setDay(d === day ? null : d)} />
+        <p className="grid-hint small">
+          {day ? (
+            <>
+              Editing <b>{weekday(day)} {formatShort(day)}</b> ·{' '}
+              <button className="link-btn" onClick={showEditor}>
+                Go to lineup editor ↓
+              </button>
+            </>
+          ) : (
+            'Select a date to view and edit that day’s lineup.'
+          )}
+        </p>
+        <LineupGrid window={selected} players={lineupPlayers} selectedDay={day} onSelectDay={pickDay} />
       </section>
-      {day && days.get(day) && <DayDetail day={days.get(day)!} onNav={(d) => setDay(d)} dates={selected.dates} />}
-      {!day && <p className="small muted" style={{ margin: 0 }}>Select a date to see that day’s lineup and start or sit players.</p>}
+      {day && days.get(day) && <DayDetail day={days.get(day)!} onNav={(d) => setDay(d)} dates={selected.dates} sectionRef={editorRef} />}
     </div>
   );
 }
@@ -274,7 +306,7 @@ export function reasonText(r: UnusedReason): string {
   }
 }
 
-function DayDetail({ day, onNav, dates }: { day: DayResult; onNav: (d: ISODate) => void; dates: ISODate[] }) {
+function DayDetail({ day, onNav, dates, sectionRef }: { day: DayResult; onNav: (d: ISODate) => void; dates: ISODate[]; sectionRef: RefObject<HTMLElement> }) {
   const { state, dispatch, lineupPlayers, data, teams } = useApp();
   const seats = useMemo(() => expandSeats(state.league.slots), [state.league.slots]);
   const status = new Map(day.players.map((s) => [s.playerId, s]));
@@ -298,7 +330,7 @@ function DayDetail({ day, onNav, dates }: { day: DayResult; onNav: (d: ISODate) 
   const without = lineupPlayers.filter((p) => !p.onIr && !status.get(p.id)?.game);
 
   return (
-    <section className="panel">
+    <section className="panel day-editor" ref={sectionRef} aria-label={`Lineup editor for ${weekday(day.date)} ${formatShort(day.date)}`}>
       <div className="panel-head">
         <div className="day-nav">
           <button className="icon-btn" disabled={idx <= 0} onClick={() => onNav(dates[idx - 1]!)} aria-label="Previous day">
@@ -309,7 +341,10 @@ function DayDetail({ day, onNav, dates }: { day: DayResult; onNav: (d: ISODate) 
           </button>
         </div>
         <h2>
-          {weekday(day.date)} {formatShort(day.date)} · {day.usable} of {day.scheduled} games fit your lineup
+          Lineup for {weekday(day.date)} {formatShort(day.date)}{' '}
+          <span className="day-count">
+            · {day.usable} of {day.scheduled} games fit your lineup
+          </span>
         </h2>
         {day.manual ? (
           <>
@@ -331,6 +366,7 @@ function DayDetail({ day, onNav, dates }: { day: DayResult; onNav: (d: ISODate) 
         <div className="day-grid">
           <div>
             <h3 style={{ marginTop: 0 }}>In Lineup</h3>
+            <p className="section-hint">Sit a player to take them out. The open spot refills automatically.</p>
             {day.seats.map(({ seat, playerId }) => {
               const p = playerId ? byId.get(playerId) : undefined;
               const st = playerId ? status.get(playerId) : undefined;
@@ -356,6 +392,7 @@ function DayDetail({ day, onNav, dates }: { day: DayResult; onNav: (d: ISODate) 
           </div>
           <div>
             <h3 style={{ marginTop: 0 }}>Sitting Out</h3>
+            <p className="section-hint">Start a player to put them in. The lowest-priority player competing for that spot sits.</p>
             {out.length === 0 && <div className="muted small">Everyone with a game is in the lineup.</div>}
             {out.map((p) => {
               const st = status.get(p.id)!;
