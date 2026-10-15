@@ -20,36 +20,13 @@
   --heat-4: #4d97e0;
   --radius: 10px;
   --shadow: 0 1px 2px rgb(15 23 42 / 6%), 0 2px 8px rgb(15 23 42 / 4%);
-  color-scheme: light;
+  /* Light theme only, whatever the device's dark-mode setting. 'only' also stops
+     browsers (e.g. Chrome's auto dark mode) from darkening the page or its controls. */
+  color-scheme: only light;
   /* Aliases used by newer components, mapped onto the original palette. */
   --border-strong: var(--border);
   --blue: var(--accent);
   --green: var(--good);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0b1220;
-    --surface: #111a2b;
-    --surface-2: #17223a;
-    --border: #24314d;
-    --text: #e6ebf3;
-    --muted: #8d99b0;
-    --accent: #5aa9ff;
-    --accent-soft: #15294a;
-    --good: #3ccf91;
-    --good-soft: #10342a;
-    --bad: #ff8a5c;
-    --bad-soft: #3a2018;
-    --warn: #f2c14e;
-    --warn-soft: #3a2f12;
-    --heat-1: #13294a;
-    --heat-2: #1a3d6e;
-    --heat-3: #22579b;
-    --heat-4: #2e74c9;
-    --shadow: none;
-    color-scheme: dark;
-  }
 }
 
 * { box-sizing: border-box; }
