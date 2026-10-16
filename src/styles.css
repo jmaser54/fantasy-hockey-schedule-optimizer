@@ -311,6 +311,11 @@ textarea { min-height: 140px; resize: vertical; font-family: inherit; }
 @media (max-width: 560px) { .period-row { grid-template-columns: 1fr 1fr; } }
 .slot-row input, .period-row input { width: 100%; padding: 5px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
 h3 { font-size: 13px; margin: 16px 0 6px; }
+.settings-foot { margin-top: 20px; padding-top: 10px; border-top: 1px solid var(--border); text-align: center; font-size: 12px; }
+.settings-foot .link-btn { color: var(--muted); }
+.settings-foot .link-btn:hover { color: var(--accent); }
+.contact-form textarea { min-height: 160px; }
+.contact-honey { position: absolute; left: -10000px; width: 1px; height: 1px; opacity: 0; }
 .toast {
   position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 60;
   background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-weight: 600; box-shadow: var(--shadow);
