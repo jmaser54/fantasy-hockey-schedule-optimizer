@@ -268,7 +268,7 @@ function RosterTable() {
   return (
     <section className="panel">
       <div className="table-wrap">
-        <table>
+        <table className="roster-table">
           <thead>
             <tr>
               <th>Player</th>
@@ -285,7 +285,7 @@ function RosterTable() {
             {rows.map(({ e, p }) => {
               if (!p) {
                 return (
-                  <tr key={e.playerId}>
+                  <tr key={e.playerId} className="missing">
                     <td colSpan={5}>
                       <span className="badge bad">Missing from Player Data</span> <span className="muted small">{e.playerId}</span>
                     </td>
@@ -301,7 +301,7 @@ function RosterTable() {
               const games = playerGames(data.schedule, p, selected.start, selected.end).filter((g) => dates.has(g.date)).length;
               return (
                 <tr key={e.playerId}>
-                  <td>
+                  <td className="r-name">
                     <PreferredToggle id={e.playerId} name={p.name} preferred={!!e.preferred} /> {p.name}
                     {p.stints && p.stints.length > 1 && (
                       <span className="badge" title={p.stints.map((s) => `${s.team}${s.from ? ` from ${s.from}` : ''}${s.to ? ` to ${s.to}` : ''}`).join('; ')}>
@@ -309,8 +309,8 @@ function RosterTable() {
                       </span>
                     )}
                   </td>
-                  <td title={teams.get(p.team)?.name}>{p.team}</td>
-                  <td>
+                  <td className="r-team" title={teams.get(p.team)?.name}>{p.team}</td>
+                  <td className="r-elig">
                     <PosToggles
                       value={pos}
                       onChange={(v) => dispatch({ type: 'updateEntry', id: e.playerId, patch: { positionsOverride: sameSet(v, p.positions) ? undefined : v } })}
@@ -326,8 +326,8 @@ function RosterTable() {
                       </span>
                     ) : null}
                   </td>
-                  <td className="n">{games}</td>
-                  <td>
+                  <td className="n r-games">{games}</td>
+                  <td className="r-status">
                     <select
                       value={e.onIr ? 'ir' : 'active'}
                       aria-label={`${p.name} status`}
@@ -337,7 +337,7 @@ function RosterTable() {
                       <option value="ir">IR</option>
                     </select>
                   </td>
-                  <td>
+                  <td className="r-remove">
                     <button className="icon-btn" onClick={() => dispatch({ type: 'removePlayer', id: e.playerId })} aria-label={`Remove ${p.name}`} title="Remove">
                       ✕
                     </button>

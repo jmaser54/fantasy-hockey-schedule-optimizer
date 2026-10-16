@@ -68,6 +68,8 @@ main { max-width: 1200px; margin: 0 auto; padding: 16px; }
 }
 .settings-btn span { font-size: 16px; line-height: 1; }
 .settings-btn:hover { border-color: var(--accent); background: var(--accent-soft); }
+.settings-btn .label-full { font-size: inherit; line-height: inherit; }
+.label-short { display: none; }
 .data-status { max-width: 1200px; margin: 0 auto; padding: 4px 16px 20px; font-size: 11px; color: var(--muted); opacity: 0.8; }
 .data-status.stale { color: var(--warn); opacity: 1; }
 
@@ -322,3 +324,50 @@ h3 { font-size: 13px; margin: 16px 0 6px; }
   th, td { padding: 6px 8px; }
   .icon-btn .small { display: none; }
 }
+
+/* Phones: header and navigation fit, roster rows in two lines. */
+@media (max-width: 600px) {
+  .topbar-inner { padding: 8px 12px 0; }
+  .settings-btn { padding: 0; width: 40px; height: 40px; justify-content: center; }
+  .settings-btn .label-full { display: none; }
+  .tabs { margin-top: 4px; gap: 0; }
+  .tab { flex: 1 1 0; padding: 10px 4px; font-size: 13px; text-align: center; }
+  .tab .label-full { display: none; }
+  .tab .label-short { display: inline; }
+  .tab .count { margin-left: 3px; }
+
+  .roster-table thead { display: none; }
+  .roster-table tbody tr:not(.missing) {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; grid-template-areas: 'name team games games' 'elig elig status remove';
+    align-items: center; gap: 4px 8px; padding: 8px 4px 8px 10px; border-bottom: 1px solid var(--border);
+  }
+  .roster-table tbody tr:not(.missing) td { border: 0; padding: 0; }
+  .roster-table .r-name { grid-area: name; white-space: normal; font-weight: 600; }
+  .roster-table .r-team { grid-area: team; justify-self: end; color: var(--muted); }
+  .roster-table .r-games { grid-area: games; justify-self: end; }
+  .roster-table .r-games::after { content: ' games'; color: var(--muted); font-weight: 400; }
+  .roster-table .r-elig { grid-area: elig; white-space: normal; }
+  .roster-table .r-status { grid-area: status; justify-self: end; }
+  .roster-table .r-remove { grid-area: remove; }
+}
+
+/* Touch screens: comfortable tap targets. Icons keep their size; the tappable area grows. */
+@media (pointer: coarse) {
+  .star, .info-btn { position: relative; }
+  .star::after, .info-btn::after { content: ''; position: absolute; inset: -12px; }
+  .icon-btn { min-width: 40px; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; }
+  .pos-toggles { gap: 4px; }
+  .pos-toggles button { min-width: 32px; min-height: 34px; font-size: 12px; padding: 2px 6px; }
+  .roster-table select { min-height: 40px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+  .btn.small { min-height: 36px; padding: 4px 12px; }
+  .segmented button, .mode-switch button { min-height: 40px; }
+  .check-row input[type='checkbox'] { width: 20px; height: 20px; }
+  .check-row { min-height: 44px; }
+  .link-btn { padding: 10px 0; margin: -10px 0; }
+  .slot-row { grid-template-columns: 90px 64px 1fr 40px; }
+  .period-row { grid-template-columns: 1fr 140px 140px 40px; }
+}
+@media (pointer: coarse) and (max-width: 560px) {
+  .period-row { grid-template-columns: 1fr 1fr; }
+}
+

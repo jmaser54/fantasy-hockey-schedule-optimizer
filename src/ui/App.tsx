@@ -14,7 +14,7 @@ import { SettingsModal } from './Settings.tsx';
 import { TradesView } from './Trades.tsx';
 
 const TABS = [
-  { id: 'rankings', label: 'Team Schedules' },
+  { id: 'rankings', label: 'Team Schedules', short: 'Schedules' },
   { id: 'roster', label: 'Roster' },
   { id: 'lineup', label: 'Lineup' },
   { id: 'trades', label: 'Trade Lab' },
@@ -80,13 +80,22 @@ export function App() {
               Playoff <span>Planner</span>
             </div>
             <button className="settings-btn" onClick={() => setSettingsOpen(true)} aria-label="League Settings" title="Review and adjust your league settings">
-              <span aria-hidden="true">⚙︎</span> League Settings
+              <span aria-hidden="true">⚙︎</span> <span className="label-full">League Settings</span>
             </button>
           </div>
           <nav className="tabs" role="tablist">
             {TABS.map((t) => (
-              <button key={t.id} role="tab" className="tab" aria-selected={tab === t.id} onClick={() => go(t.id)}>
-                {t.label}
+              <button key={t.id} role="tab" className="tab" aria-selected={tab === t.id} aria-label={'short' in t ? t.label : undefined} onClick={() => go(t.id)}>
+                {'short' in t ? (
+                  <>
+                    <span className="label-full">{t.label}</span>
+                    <span className="label-short" aria-hidden="true">
+                      {t.short}
+                    </span>
+                  </>
+                ) : (
+                  t.label
+                )}
                 {t.id === 'roster' && state.roster.length > 0 && <span className="count">{state.roster.length}</span>}
               </button>
             ))}
