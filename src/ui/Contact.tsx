@@ -20,7 +20,7 @@ export function ContactForm({ onBack }: { onBack: () => void }) {
         ))}
         <input type="hidden" name="_next" value={contactReturnUrl()} />
         <p className="small muted" style={{ margin: 0 }}>
-          Questions, ideas or problems with Playoff Planner? Send a message.
+          Have feedback? Send us a message.
         </p>
         <div className="form-row">
           <div className="field">
