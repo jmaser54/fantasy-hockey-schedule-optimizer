@@ -4,7 +4,6 @@ import type { LeagueConfig, Period } from '../domain/types.ts';
 import { useApp } from './context.ts';
 import { PosToggles } from './common.tsx';
 import { ContactForm } from './Contact.tsx';
-import { contactEnabled } from '../contact.ts';
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const { state, dispatch, toast } = useApp();
@@ -125,13 +124,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               Restore 2027 Defaults
             </button>
           </div>
-          {contactEnabled() && (
-            <div className="settings-foot">
-              <button className="link-btn" onClick={() => setContact(true)}>
-                Contact
-              </button>
-            </div>
-          )}
+          <div className="settings-foot">
+            <button className="link-btn" onClick={() => setContact(true)}>
+              Contact
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -41,7 +41,7 @@ Fantasy hockey playoff optimizer: maximizes **usable player-games** (not points)
 - **Refresh:** `.github/workflows/refresh-data.yml` runs daily and on pipeline changes, then commits the validated snapshot. If any validation fails, nothing is written.
 - **Dates:** `YYYY-MM-DD` strings in the NHL's Eastern game-date convention. There's no local-time `Date` arithmetic.
 
-- **Contact form:** League Settings → Contact sends through FormSubmit's AJAX endpoint (the service Letter Ladder uses), addressed by FormSubmit's random-string alias so the owner's email is never in the site. Set the alias in `src/contact.ts` (`CONTACT_FORM_ID`) or `VITE_CONTACT_FORM_ID` at build time; while it's empty the Contact link is hidden.
+- **Contact form:** League Settings → Contact is a standard FormSubmit form post with the same recipient and settings as Letter Ladder's `contact.html` (`src/contact.ts`). FormSubmit then returns the visitor here (`_next` with `?contact=sent`), and the app shows "Message sent". The recipient address is visible in the page source, as it is on Letter Ladder.
 
 ## Status
 

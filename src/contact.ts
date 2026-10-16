@@ -1,56 +1,30 @@
 /**
- * Contact form delivery via FormSubmit (formsubmit.co), the same service
- * Letter Ladder uses. The endpoint uses FormSubmit's random-string alias, so
- * the owner's email address never appears in this site's code or traffic.
- *
- * Set the alias here (or via VITE_CONTACT_FORM_ID at build time). While it is
- * empty the Contact link is hidden.
+ * Contact form delivery: a standard FormSubmit (formsubmit.co) form post, the
+ * same recipient and settings as Letter Ladder's contact.html. After sending,
+ * FormSubmit redirects the visitor back here (`_next`) with `?contact=sent`.
  */
-export const CONTACT_FORM_ID: string = import.meta.env.VITE_CONTACT_FORM_ID ?? '';
+export const CONTACT_ACTION = 'https://formsubmit.co/jmaser4@gmail.com';
 
-export const contactEnabled = () => CONTACT_FORM_ID.trim().length > 0;
-
-export interface ContactMessage {
-  name: string;
-  email: string;
-  message: string;
-}
+export const CONTACT_FIELDS = {
+  _subject: 'Playoff Planner — Contact form message',
+  _template: 'box',
+  _captcha: 'false',
+} as const;
 
 export const MESSAGE_MAX = 5000;
+const SENT_PARAM = 'contact';
 
-/** Request body for FormSubmit's AJAX endpoint. `_honey` is FormSubmit's spam trap and must stay empty. */
-export function contactPayload(m: ContactMessage, honey = ''): Record<string, string> {
-  return {
-    name: m.name.trim(),
-    email: m.email.trim(),
-    message: m.message.trim().slice(0, MESSAGE_MAX),
-    _subject: 'Playoff Planner — Contact form message',
-    _template: 'box',
-    _captcha: 'false',
-    _honey: honey,
-  };
+/** Absolute URL FormSubmit returns the visitor to: this page and tab, flagged as sent. */
+export function contactReturnUrl(loc: Pick<Location, 'origin' | 'pathname' | 'hash'> = location): string {
+  return `${loc.origin}${loc.pathname}?${SENT_PARAM}=sent${loc.hash}`;
 }
 
-/** Send a message. Resolves on success; throws with a user-facing message otherwise. */
-export async function sendContact(m: ContactMessage, honey = '', fetchImpl: typeof fetch = fetch): Promise<void> {
-  if (!contactEnabled()) throw new Error('The contact form isn’t set up yet.');
-  if (!m.message.trim()) throw new Error('Please enter a message.');
-  let res: Response;
-  try {
-    res = await fetchImpl(`https://formsubmit.co/ajax/${encodeURIComponent(CONTACT_FORM_ID.trim())}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify(contactPayload(m, honey)),
-    });
-  } catch {
-    throw new Error('Couldn’t reach the server. Check your connection and try again.');
-  }
-  let ok = res.ok;
-  try {
-    const body = (await res.json()) as { success?: string | boolean };
-    if (body && (body.success === false || body.success === 'false')) ok = false;
-  } catch {
-    // A non-JSON reply on a 2xx status is still treated as delivered.
-  }
-  if (!ok) throw new Error('Your message couldn’t be sent. Please try again later.');
+/** True when arriving back from FormSubmit; removes the flag from the address bar. */
+export function takeContactReturn(): boolean {
+  const params = new URLSearchParams(location.search);
+  if (params.get(SENT_PARAM) !== 'sent') return false;
+  params.delete(SENT_PARAM);
+  const q = params.toString();
+  history.replaceState(null, '', `${location.pathname}${q ? `?${q}` : ''}${location.hash}`);
+  return true;
 }

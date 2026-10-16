@@ -1,27 +1,10 @@
 import { useState } from 'react';
-import { MESSAGE_MAX, sendContact } from '../contact.ts';
+import { CONTACT_ACTION, CONTACT_FIELDS, MESSAGE_MAX, contactReturnUrl } from '../contact.ts';
 
-/** Contact form shown inside the League Settings dialog. */
+/** Contact form shown inside the League Settings dialog. Submits as a normal form post to FormSubmit. */
 export function ContactForm({ onBack }: { onBack: () => void }) {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
-  const [honey, setHoney] = useState('');
-  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
-  const [error, setError] = useState('');
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!message.trim() || status === 'sending') return;
-    setStatus('sending');
-    try {
-      await sendContact({ name, email, message }, honey);
-      setStatus('sent');
-    } catch (err) {
-      setError((err as Error).message);
-      setStatus('error');
-    }
-  };
+  const [sending, setSending] = useState(false);
 
   return (
     <>
@@ -31,50 +14,34 @@ export function ContactForm({ onBack }: { onBack: () => void }) {
           Back
         </button>
       </div>
-      {status === 'sent' ? (
-        <div className="panel-body stack">
-          <p style={{ margin: 0 }}>
-            <b>Message sent.</b> Thanks for getting in touch!
-          </p>
-          <div>
-            <button className="btn" onClick={onBack}>
-              Back to Settings
-            </button>
-          </div>
-        </div>
-      ) : (
-        <form className="panel-body stack contact-form" onSubmit={submit} noValidate>
-          <p className="small muted" style={{ margin: 0 }}>
-            Questions, ideas or problems with Playoff Planner? Send a message.
-          </p>
-          <div className="form-row">
-            <div className="field">
-              <label htmlFor="contact-name">Name (optional)</label>
-              <input id="contact-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />
-            </div>
-            <div className="field">
-              <label htmlFor="contact-email">Email (optional, for a reply)</label>
-              <input id="contact-email" type="email" autoComplete="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={200} />
-            </div>
+      <form className="panel-body stack contact-form" action={CONTACT_ACTION} method="POST" onSubmit={() => setSending(true)}>
+        {Object.entries(CONTACT_FIELDS).map(([name, value]) => (
+          <input key={name} type="hidden" name={name} value={value} />
+        ))}
+        <input type="hidden" name="_next" value={contactReturnUrl()} />
+        <p className="small muted" style={{ margin: 0 }}>
+          Questions, ideas or problems with Playoff Planner? Send a message.
+        </p>
+        <div className="form-row">
+          <div className="field">
+            <label htmlFor="contact-name">Name (optional)</label>
+            <input id="contact-name" name="name" autoComplete="name" maxLength={100} />
           </div>
           <div className="field">
-            <label htmlFor="contact-message">Message</label>
-            <textarea id="contact-message" required value={message} onChange={(e) => setMessage(e.target.value)} maxLength={MESSAGE_MAX} />
+            <label htmlFor="contact-email">Email (optional, for a reply)</label>
+            <input id="contact-email" name="email" type="email" autoComplete="email" inputMode="email" maxLength={200} />
           </div>
-          {/* Spam trap: hidden from people, filled in by some bots. */}
-          <input className="contact-honey" tabIndex={-1} autoComplete="off" aria-hidden="true" value={honey} onChange={(e) => setHoney(e.target.value)} name="_honey" />
-          {status === 'error' && (
-            <div className="notice error" role="alert">
-              {error}
-            </div>
-          )}
-          <div>
-            <button className="btn primary" type="submit" disabled={!message.trim() || status === 'sending'}>
-              {status === 'sending' ? 'Sending…' : 'Send Message'}
-            </button>
-          </div>
-        </form>
-      )}
+        </div>
+        <div className="field">
+          <label htmlFor="contact-message">Message</label>
+          <textarea id="contact-message" name="message" required value={message} onChange={(e) => setMessage(e.target.value)} maxLength={MESSAGE_MAX} />
+        </div>
+        <div>
+          <button className="btn primary" type="submit" disabled={!message.trim() || sending}>
+            {sending ? 'Sending…' : 'Send Message'}
+          </button>
+        </div>
+      </form>
     </>
   );
 }

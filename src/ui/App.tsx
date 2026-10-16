@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { trackTabView } from '../analytics.ts';
+import { takeContactReturn } from '../contact.ts';
 import { buildPlayerLookup, isStale, loadDataset, type DataStatus } from '../data/load.ts';
 import { dayCount, eachDate, formatRange, formatShort, isValidISODate } from '../domain/dates.ts';
 import { optimizeDates, summarize, type DayResult, type LineupPlayer } from '../domain/optimizer.ts';
@@ -32,7 +33,7 @@ export function App() {
   const [status, setStatus] = useState<DataStatus>({ state: 'loading' });
   const [tab, setTab] = useState<TabId>(tabFromHash);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [toastMsg, setToastMsg] = useState<string | null>(notice ?? null);
+  const [toastMsg, setToastMsg] = useState<string | null>(() => (takeContactReturn() ? 'Message sent. Thanks for getting in touch!' : (notice ?? null)));
   const [saveFailed, setSaveFailed] = useState(false);
 
   useEffect(() => {
