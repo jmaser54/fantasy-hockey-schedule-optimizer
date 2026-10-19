@@ -1,12 +1,9 @@
 /** About page, opened from the footer link (#about). */
-export function AboutView({ onBack }: { onBack: () => void }) {
+export function AboutView() {
   return (
     <section className="panel about">
       <div className="panel-head">
         <h2>About Playoff Planner</h2>
-        <button className="btn ghost" onClick={onBack}>
-          Back
-        </button>
       </div>
       <div className="panel-body">
         <p style={{ margin: 0 }}>

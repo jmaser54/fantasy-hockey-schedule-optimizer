@@ -116,7 +116,7 @@ export function App() {
       </header>
       <main>
         {saveFailed && <div className="notice" style={{ marginBottom: 12 }}>Changes can’t be saved in this browser (storage is blocked or full).</div>}
-        {about && status.state !== 'ready' && <AboutView onBack={() => go(tab)} />}
+        {about && status.state !== 'ready' && <AboutView />}
         {!about && status.state === 'loading' && <div className="empty">Loading NHL schedule…</div>}
         {!about && status.state === 'error' && (
           <div className="notice error">
@@ -125,7 +125,7 @@ export function App() {
         )}
         {status.state === 'ready' && (
           <Ready state={state} dispatch={dispatch} data={status.data} toast={toast} periodBar={!about}>
-            {about && <AboutView onBack={() => go(tab)} />}
+            {about && <AboutView />}
             {!about && tab === 'rankings' && <RankingsView />}
             {!about && tab === 'roster' && <RosterView onGoLineup={() => go('lineup')} />}
             {!about && tab === 'lineup' && <LineupView onGoRoster={() => go('roster')} />}
@@ -158,7 +158,8 @@ function DataFooter({ status }: { status: DataStatus }) {
   ].join('\n');
   return (
     <footer className={`data-status${status.stale ? ' stale' : ''}`}>
-      <span title={title}>{status.stale ? `NHL data from ${when}, may be outdated` : `NHL data updated ${when}`}</span> · {about}
+      <span title={title}>{status.stale ? `NHL data from ${when}, may be outdated` : `NHL data updated ${when}`}</span>
+      {about}
     </footer>
   );
 }

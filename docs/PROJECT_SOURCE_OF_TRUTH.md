@@ -118,8 +118,8 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`):
 - Priorities and per-date choices survive reloads via the app's `localStorage` persistence. Overrides are keyed by date, so they only affect windows containing that date.
 
 ### About page (Confirmed)
-- A small "About" link sits in the footer, after the data note: "NHL data updated <date> · About". It must not appear in the main navigation or prominently on the main page.
-- It opens a minimal About view at `#about`, using the app's existing hash navigation, with a Back button that returns to the tab you came from. The browser Back button also works.
+- A small "About" link sits at the far right of the footer, with the data note ("NHL data updated <date>") on the left. It must not appear in the main navigation or prominently on the main page.
+- It opens a minimal About view at `#about`, using the app's existing hash navigation. There's no in-page Back button: the tabs and League Settings provide navigation, and the browser Back button returns to the previous tab.
 - Exact copy:
   - Title: "About Playoff Planner".
   - Text: "Playoff Planner was created by Jeff Maser to help fantasy hockey managers optimize their lineups by combining NHL team schedules, roster data, and custom league settings. Users can also visualize how trades and free-agent moves would affect their lineups."
@@ -318,7 +318,7 @@ Each rule below is enforced by the code or tests named; keep them true.
     - The Roster two-line layout depends on the class names `r-name`, `r-team`, `r-elig`, `r-games`, `r-status`, `r-remove` and on the row column count.
     - Adding a roster column means updating the ≤600px grid in `styles.css`.
     - Test at 360px; that's where overflow appeared.
-13. **Footer timing.** The footer (`.data-status`) now renders immediately, with only "About" until data loads. The smoke test reads its "NHL data" text only after the Team Schedules table has rendered; keep that ordering if you change either.
+13. **Footer timing and layout.** The footer (`.data-status`, a flex row: data note left, About right via `margin-left: auto`, including in the touch rule) renders immediately, with only "About" until data loads. The smoke test reads its "NHL data" text only after the Team Schedules table has rendered; keep that ordering if you change either.
 14. **Contact return flow.**
     - `takeContactReturn()` runs once in `App`'s toast state initializer and strips `?contact=sent`, keeping the hash.
     - `_next` must stay an absolute URL built at runtime (`contactReturnUrl`).
