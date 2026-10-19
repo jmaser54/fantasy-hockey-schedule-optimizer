@@ -27,6 +27,7 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`):
    - This page *is* "the optimizer"; there's no separate optimizer page.
 4. **Trade Lab** (`src/ui/Trades.tsx`): try drops and adds and compare games in the lineup, current vs proposed. "Update Roster" applies the proposal.
 5. **League Settings** (modal, `src/ui/Settings.tsx`): roster size, IR slots, lineup slots and playoff rounds, plus a Contact link at the bottom.
+6. **About** (`src/ui/About.tsx`): opened only from the footer link; not a tab.
 
 **Confirmed scope and exclusions:**
 - Guest-first: no accounts, Firebase or backend. All user state lives in the browser's `localStorage`.
@@ -116,6 +117,18 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`):
 ### Persistence (Confirmed)
 - Priorities and per-date choices survive reloads via the app's `localStorage` persistence. Overrides are keyed by date, so they only affect windows containing that date.
 
+### About page (Confirmed)
+- A small "About" link sits in the footer, after the data note: "NHL data updated <date> · About". It must not appear in the main navigation or prominently on the main page.
+- It opens a minimal About view at `#about`, using the app's existing hash navigation, with a Back button that returns to the tab you came from. The browser Back button also works.
+- Exact copy:
+  - Title: "About Playoff Planner".
+  - Text: "Playoff Planner was created by Jeff Maser to help fantasy hockey managers optimize their lineups by combining NHL team schedules, roster data, and custom league settings. Users can also visualize how trades and free-agent moves would affect their lineups."
+- **Implemented:**
+  - The period bar is hidden on About, and no tab shows as selected.
+  - The tabs and the League Settings button still work from About.
+  - About opens at the top of the page.
+  - No GA page view is sent for About (unchanged analytics behavior).
+
 ### Analytics and contact (Confirmed / Implemented)
 - **GA4:** tag `G-NYB64MVCVE` in `index.html`.
   - One `page_view` per in-app tab change, with page title "Playoff Planner – <Tab>" (`src/analytics.ts`, called from `App.tsx`).
@@ -135,7 +148,7 @@ Vite 6 + React 18 + TypeScript (strict), Vitest. No runtime dependencies besides
 
 | Area | Files | Role |
 |---|---|---|
-| Entry | `index.html`, `src/main.tsx`, `src/ui/App.tsx` | Shell, tabs (hash routing via `tabFromHash`), header, data loading, toast, Settings modal. `Ready` builds the app context. |
+| Entry | `index.html`, `src/main.tsx`, `src/ui/App.tsx` | Shell, tabs (hash routing via `tabFromHash`), the About view (`#about` via `isAboutHash`; `about` state, separate from `tab`), header, data loading, footer (`DataFooter`: data note plus the About link), toast, Settings modal. `Ready` builds the app context and renders the period bar unless `periodBar` is false. |
 | Context | `src/ui/context.ts` | `AppCtx`: `state`, `dispatch`, `data`, `resolve`, `teams`, `windows`, `selected`, `lineupPlayers`, `days`, `summarizeWindow`, `toast`. |
 | State | `src/state/appState.ts` | `AppState`, `reducer` (actions: select, setCustom, setPeriods, setLeague, addPlayers, removePlayer, updateEntry, replacePlayer, addCustomPlayer, clearRoster, setManual, clearManual, scenario, scenarioApply), `proposedRoster`, tolerant `deserialize`/`serialize`, `loadFromStorage`/`saveToStorage`. |
 | Domain (pure, tested) | `src/domain/*` | `optimizer.ts` (daily lineup, priorities, overrides, totals), `matching.ts` (Kuhn bipartite matching), `capacity.ts` (daily group counts, `lineupGroupTotals`), `roster.ts` (`validateRoster`, `describeIssue`, `toLineupPlayers`, `effectivePositions`), `schedule.ts` (`ScheduleIndex`, `teamOnDate`, `playerGameOn`, `playerGames`, `opponent`), `league.ts`, `dates.ts`, `rankings.ts`, `teamSchedules.ts`, `rosterImport.ts`, `names.ts`, `types.ts`. |
@@ -305,7 +318,8 @@ Each rule below is enforced by the code or tests named; keep them true.
     - The Roster two-line layout depends on the class names `r-name`, `r-team`, `r-elig`, `r-games`, `r-status`, `r-remove` and on the row column count.
     - Adding a roster column means updating the ≤600px grid in `styles.css`.
     - Test at 360px; that's where overflow appeared.
-13. **Contact return flow.**
+13. **Footer timing.** The footer (`.data-status`) now renders immediately, with only "About" until data loads. The smoke test reads its "NHL data" text only after the Team Schedules table has rendered; keep that ordering if you change either.
+14. **Contact return flow.**
     - `takeContactReturn()` runs once in `App`'s toast state initializer and strips `?contact=sent`, keeping the hash.
     - `_next` must stay an absolute URL built at runtime (`contactReturnUrl`).
 

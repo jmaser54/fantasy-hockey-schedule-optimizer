@@ -8,6 +8,7 @@ import { toLineupPlayers } from '../domain/roster.ts';
 import type { ISODate, Player } from '../domain/types.ts';
 import { loadFromStorage, reducer, saveToStorage } from '../state/appState.ts';
 import { Ctx, useApp, type AppCtx, type Window } from './context.ts';
+import { AboutView } from './About.tsx';
 import { LineupView } from './Lineup.tsx';
 import { RankingsView } from './Rankings.tsx';
 import { RosterView } from './Roster.tsx';
@@ -22,6 +23,8 @@ const TABS = [
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
+const isAboutHash = () => globalThis.location?.hash === '#about';
+
 function tabFromHash(): TabId {
   const h = globalThis.location?.hash.replace('#', '');
   return (TABS.find((t) => t.id === h)?.id ?? 'rankings') as TabId;
@@ -32,6 +35,7 @@ export function App() {
   const [state, dispatch] = useReducer(reducer, initial);
   const [status, setStatus] = useState<DataStatus>({ state: 'loading' });
   const [tab, setTab] = useState<TabId>(tabFromHash);
+  const [about, setAbout] = useState(isAboutHash);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(() => (takeContactReturn() ? 'Message sent. Thanks for getting in touch!' : (notice ?? null)));
   const [saveFailed, setSaveFailed] = useState(false);
@@ -55,7 +59,12 @@ export function App() {
   }, [tab]);
 
   useEffect(() => {
-    const onHash = () => setTab(tabFromHash());
+    // #about opens the About page and keeps the current tab to return to.
+    const onHash = () => {
+      if (isAboutHash()) return setAbout(true);
+      setAbout(false);
+      setTab(tabFromHash());
+    };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
@@ -70,7 +79,9 @@ export function App() {
   const go = (id: TabId) => {
     history.replaceState(null, '', `#${id}`);
     setTab(id);
+    setAbout(false);
   };
+  useEffect(() => window.scrollTo(0, 0), [about]);
 
   return (
     <>
@@ -86,7 +97,7 @@ export function App() {
           </div>
           <nav className="tabs" role="tablist">
             {TABS.map((t) => (
-              <button key={t.id} role="tab" className="tab" aria-selected={tab === t.id} aria-label={'short' in t ? t.label : undefined} onClick={() => go(t.id)}>
+              <button key={t.id} role="tab" className="tab" aria-selected={!about && tab === t.id} aria-label={'short' in t ? t.label : undefined} onClick={() => go(t.id)}>
                 {'short' in t ? (
                   <>
                     <span className="label-full">{t.label}</span>
@@ -105,18 +116,20 @@ export function App() {
       </header>
       <main>
         {saveFailed && <div className="notice" style={{ marginBottom: 12 }}>Changes can’t be saved in this browser (storage is blocked or full).</div>}
-        {status.state === 'loading' && <div className="empty">Loading NHL schedule…</div>}
-        {status.state === 'error' && (
+        {about && status.state !== 'ready' && <AboutView onBack={() => go(tab)} />}
+        {!about && status.state === 'loading' && <div className="empty">Loading NHL schedule…</div>}
+        {!about && status.state === 'error' && (
           <div className="notice error">
             <b>Schedule data couldn’t be loaded.</b> {status.message}
           </div>
         )}
         {status.state === 'ready' && (
-          <Ready state={state} dispatch={dispatch} data={status.data} toast={toast}>
-            {tab === 'rankings' && <RankingsView />}
-            {tab === 'roster' && <RosterView onGoLineup={() => go('lineup')} />}
-            {tab === 'lineup' && <LineupView onGoRoster={() => go('roster')} />}
-            {tab === 'trades' && <TradesView onGoRoster={() => go('roster')} />}
+          <Ready state={state} dispatch={dispatch} data={status.data} toast={toast} periodBar={!about}>
+            {about && <AboutView onBack={() => go(tab)} />}
+            {!about && tab === 'rankings' && <RankingsView />}
+            {!about && tab === 'roster' && <RosterView onGoLineup={() => go('lineup')} />}
+            {!about && tab === 'lineup' && <LineupView onGoRoster={() => go('roster')} />}
+            {!about && tab === 'trades' && <TradesView onGoRoster={() => go('roster')} />}
             {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
           </Ready>
         )}
@@ -127,9 +140,14 @@ export function App() {
   );
 }
 
-/** Subtle data-freshness note at the foot of the page (errors are shown in the main area). */
+/** Subtle footer: data-freshness note (errors are shown in the main area) and the About link. */
 function DataFooter({ status }: { status: DataStatus }) {
-  if (status.state !== 'ready') return null;
+  const about = (
+    <a className="foot-link" href="#about">
+      About
+    </a>
+  );
+  if (status.state !== 'ready') return <footer className="data-status">{about}</footer>;
   const d = status.data;
   const when = formatShort(d.scheduleFetchedAt.slice(0, 10));
   const title = [
@@ -139,13 +157,13 @@ function DataFooter({ status }: { status: DataStatus }) {
     ...d.warnings.slice(0, 3),
   ].join('\n');
   return (
-    <footer className={`data-status${status.stale ? ' stale' : ''}`} title={title}>
-      {status.stale ? `NHL data from ${when}, may be outdated` : `NHL data updated ${when}`}
+    <footer className={`data-status${status.stale ? ' stale' : ''}`}>
+      <span title={title}>{status.stale ? `NHL data from ${when}, may be outdated` : `NHL data updated ${when}`}</span> · {about}
     </footer>
   );
 }
 
-function Ready(props: { state: AppCtx['state']; dispatch: AppCtx['dispatch']; data: AppCtx['data']; toast: AppCtx['toast']; children: React.ReactNode }) {
+function Ready(props: { state: AppCtx['state']; dispatch: AppCtx['dispatch']; data: AppCtx['data']; toast: AppCtx['toast']; periodBar: boolean; children: React.ReactNode }) {
   const { state, dispatch, data, toast } = props;
 
   const lookup = useMemo(() => buildPlayerLookup(data.players, state.customPlayers), [data.players, state.customPlayers]);
@@ -196,7 +214,7 @@ function Ready(props: { state: AppCtx['state']; dispatch: AppCtx['dispatch']; da
   const ctx: AppCtx = { state, dispatch, data, resolve: lookup.resolve, teams, windows, selected, lineupPlayers, days, summarizeWindow, toast };
   return (
     <Ctx.Provider value={ctx}>
-      <PeriodBar />
+      {props.periodBar && <PeriodBar />}
       {props.children}
     </Ctx.Provider>
   );
