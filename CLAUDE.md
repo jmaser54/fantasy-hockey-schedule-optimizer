@@ -3,7 +3,7 @@
 Vite + React + TypeScript single-page app, deployed to GitHub Pages. The canonical detailed reference is **`docs/PROJECT_SOURCE_OF_TRUTH.md`**: product requirements, architecture, business rules, persistence, testing, regression lessons and open questions.
 
 ## Before changing anything
-1. Read `docs/PROJECT_SOURCE_OF_TRUTH.md` before any change that could affect documented product behavior, business rules, architecture, data flow, persistence or other regression-sensitive areas.
+1. Read the relevant sections of `docs/PROJECT_SOURCE_OF_TRUTH.md` before any change that could affect documented requirements, product behavior, business rules, architecture, data flow, persistence or known regressions (§G).
 2. Inspect the relevant current code and tests; don't rely only on the doc, assumptions or conversation history. The doc can go stale. If it disagrees with the code, investigate and say so; don't silently pick one.
 3. Check `git status` first and preserve any existing changes. Don't commit unrelated work.
 
@@ -27,5 +27,16 @@ Vite + React + TypeScript single-page app, deployed to GitHub Pages. The canonic
 - Commit only the files the task touched.
 
 ## Keep the source of truth current
-- Update `docs/PROJECT_SOURCE_OF_TRUTH.md` in the same change whenever work materially changes documented requirements, architecture, business rules, persistence, workflows or regression lessons. Mark items Confirmed, Implemented or Open as that document does.
+- Update `docs/PROJECT_SOURCE_OF_TRUTH.md` in the same commit whenever:
+  - the implementation changes something it describes (behavior, architecture, data flow, persistence, commands, workflows);
+  - a requirement or decision is made or changed by the user;
+  - a documented limitation, discrepancy or open question is resolved, or a new one is discovered;
+  - a regression teaches a lesson worth keeping (§G).
+- Keep the labels honest:
+  - **Confirmed** = an explicit user decision;
+  - **Implemented** = verified in the current code;
+  - **Open** = unresolved.
+
+  Never silently turn an Open item or an assumption into a Confirmed decision; record the user's decision when they make one. Passing tests or the existence of a function doesn't prove documented behavior; check the code.
+- Keep the document focused and accurate: correct or remove stale statements rather than appending history. Update its "Last reviewed" line when you review it. Don't copy its contents into this file; link to it.
 - Keep documentation out of the deployed website. Never add docs to `public/`, import them into the app, or link them from the site's UI or navigation. The repository is public, so don't put secrets in docs.

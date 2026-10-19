@@ -9,7 +9,7 @@ Labels used below:
 - **Implemented**: verified in the current code; not necessarily an explicit requirement.
 - **Open**: unresolved; ask before changing behavior.
 
-Last reviewed against commit `70b5ba3` (2026-10-17).
+Last reviewed against commit `c9af699` (2026-10-19).
 
 ---
 
@@ -136,7 +136,7 @@ Vite 6 + React 18 + TypeScript (strict), Vitest. No runtime dependencies besides
 | Area | Files | Role |
 |---|---|---|
 | Entry | `index.html`, `src/main.tsx`, `src/ui/App.tsx` | Shell, tabs (hash routing via `tabFromHash`), header, data loading, toast, Settings modal. `Ready` builds the app context. |
-| Context | `src/ui/context.ts` | `AppCtx`: `state`, `dispatch`, `data`, `resolve`, `windows`, `selected`, `lineupPlayers`, `days`, `summarizeWindow`, `toast`. |
+| Context | `src/ui/context.ts` | `AppCtx`: `state`, `dispatch`, `data`, `resolve`, `teams`, `windows`, `selected`, `lineupPlayers`, `days`, `summarizeWindow`, `toast`. |
 | State | `src/state/appState.ts` | `AppState`, `reducer` (actions: select, setCustom, setPeriods, setLeague, addPlayers, removePlayer, updateEntry, replacePlayer, addCustomPlayer, clearRoster, setManual, clearManual, scenario, scenarioApply), `proposedRoster`, tolerant `deserialize`/`serialize`, `loadFromStorage`/`saveToStorage`. |
 | Domain (pure, tested) | `src/domain/*` | `optimizer.ts` (daily lineup, priorities, overrides, totals), `matching.ts` (Kuhn bipartite matching), `capacity.ts` (daily group counts, `lineupGroupTotals`), `roster.ts` (`validateRoster`, `describeIssue`, `toLineupPlayers`, `effectivePositions`), `schedule.ts` (`ScheduleIndex`, `teamOnDate`, `playerGameOn`, `playerGames`, `opponent`), `league.ts`, `dates.ts`, `rankings.ts`, `teamSchedules.ts`, `rosterImport.ts`, `names.ts`, `types.ts`. |
 | Data load | `src/data/load.ts`, `src/data/format.ts`, `src/data/validate.ts` | Fetch `public/data/*.json`, validate, build `Dataset`; `isStale` (more than 3 days old); `buildPlayerLookup` (resolves `nhl-<id>`/`espn-<id>` aliases). |
@@ -183,7 +183,10 @@ Each rule below is enforced by the code or tests named; keep them true.
    - `summarize` counts `scheduled` for every rostered player whose team plays, including IR players, and `usable` only when `seatKey` is set.
    - `DayResult.scheduled` excludes IR players.
    - The Lineup summaries exclude IR players from both groups (`lineupGroupTotals`), so they equal `RangeResult.usable/scheduled` and the daily footer.
-6. **Goalie grouping.** The Lineup grid and the summaries both treat a player as a goalie only if *every* listed position is G (`isGoalieOnly` in `capacity.ts`; `isGoalie` in `Lineup.tsx` `LineupGrid`). Change both together, or neither.
+6. **Goalie grouping.**
+   - The Lineup grid rows and the summary cards both treat a player as a goalie only if *every* listed position is G (`isGoalie` in `Lineup.tsx` `LineupGrid`; `isGoalieOnly` in `capacity.ts`). Change both together, or neither.
+   - They differ only for a player with no positions: the grid counts them as a goalie, the summaries as a skater (§H #11).
+   - The grid's "Skaters"/"Goalies" count rows (`dailyGroupCounts`) are a separate measure, players with a game vs active slots. They count a player in each group they can play, so a dual-eligible player counts in both.
 7. **IR.**
    - `onIr` alone decides IR.
    - `validateRoster` reports only `over-roster`, `over-ir`, `unknown-player` and `no-positions`.
@@ -194,11 +197,16 @@ Each rule below is enforced by the code or tests named; keep them true.
    - "Full Playoffs" counts each date once even if rounds overlap.
    - A traded player is on exactly one team per date, via stints (`teamOnDate`; `optimizer.test.ts` case 9).
 10. **Stale or invalid saved data.**
-    - Each saved field loads independently; a bad field falls back to its default with a notice, without discarding the rest (`deserialize`).
+    - Each saved field loads independently, without discarding the rest (`deserialize`).
+    - A notice appears only when the saved data is unreadable, or when the league, playoff dates or roster fail validation (those reset to defaults).
+    - Other fields silently fall back or are filtered: custom range, selection, custom players, daily choices, Trade Lab draft.
     - Old manual seat maps load as that date's starts.
     - The legacy fields `markedInjured` and `irEligibility` are ignored and dropped on the next save.
     - Overrides for dates outside every window are kept but have no effect.
-11. **The data snapshot must validate.** `validateSchedule`/`validatePlayers` run in the refresh, in CI (`scripts/check-data.ts`) and at app load. Exactly 84 games per team; every game cross-checked in both teams' schedules.
+11. **The data snapshot must validate.**
+    - `validateSchedule`/`validatePlayers` run in the refresh, in CI (`scripts/check-data.ts`) and at app load (`buildDataset`).
+    - Two checks are **refresh-only**: exactly 84 games per team (`expectedGamesPerTeam`, `GAMES_PER_TEAM` in `scripts/refresh-data.ts`), and cross-checking every game in both teams' schedules (`mergeClubSchedules`).
+    - CI and the app validate structure and consistency, but not the per-team count.
 
 ## E. Persistence and data integrity
 
@@ -206,7 +214,7 @@ Each rule below is enforced by the code or tests named; keep them true.
   - Key `playoff-optimizer:v1` in `localStorage` (`STORAGE_KEY`, `STATE_VERSION = 1`).
   - Saved on every state change (`App.tsx` effect, then `saveToStorage`).
   - If storage fails, a banner says changes can't be saved.
-  - No backend. Nothing leaves the browser except GA page views and contact form posts.
+  - No backend. The roster and settings never leave the browser. The only outbound traffic is the GA tag (page load plus a page view per tab change) and contact form posts.
 - **Saved data:**
   - `league` (rosterSize, irSlots, slots), `periods`, `custom` range, `selection`;
   - `roster` (`RosterEntry`: `playerId`, `onIr`, optional `positionsOverride`, optional `preferred`, stored only when true);
@@ -315,3 +323,4 @@ Each rule below is enforced by the code or tests named; keep them true.
 | 8 | Touch target sizes | Aim for about 40–44px where practical. | Position toggles are 32×34 (space-limited); Lineup grid cells weren't enlarged. | — | No |
 | 9 | Missing-player roster rows on mobile | — | Rows with class `missing` keep the table layout at ≤600px. | Not exercised with real data. | No |
 | 10 | Priority granularity | ★ Preferred is binary. | Ties break by roster order. | No full ranking; the owner hasn't asked for one. | Yes, if requested |
+| 11 | Players with no positions | — | `LineupGrid` (`every` on an empty list) treats them as goalies; `isGoalieOnly` treats them as skaters. `validateRoster` reports `no-positions`. | Only reachable through an old saved custom player or a data record with no positions; the UI can't create one. | No (fix only if it matters) |
