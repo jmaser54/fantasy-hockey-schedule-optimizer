@@ -47,12 +47,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       <div className="panel modal" role="dialog" aria-modal="true" aria-label="League Settings">
         <div className="panel-head">
           <h2>League Settings</h2>
-          <button className="btn ghost" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn primary" disabled={hasErrors} onClick={save}>
-            Save
-          </button>
         </div>
         <div className="panel-body">
           <div className="form-row">
@@ -129,6 +123,14 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               Contact
             </button>
           </div>
+        </div>
+        <div className="modal-actions">
+          <button className="btn ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn primary" disabled={hasErrors} onClick={save}>
+            Save
+          </button>
         </div>
       </div>
     </div>

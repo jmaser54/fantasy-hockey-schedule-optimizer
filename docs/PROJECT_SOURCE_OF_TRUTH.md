@@ -26,7 +26,7 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`):
    - Summary cards, a player × date grid, and a day editor with Start/Sit.
    - This page *is* "the optimizer"; there's no separate optimizer page.
 4. **Trade Lab** (`src/ui/Trades.tsx`): try drops and adds and compare games in the lineup, current vs proposed. "Update Roster" applies the proposal.
-5. **League Settings** (modal, `src/ui/Settings.tsx`): roster size, IR slots, lineup slots and playoff rounds, plus a Contact link at the bottom.
+5. **League Settings** (modal, `src/ui/Settings.tsx`): roster size, IR slots, lineup slots and playoff rounds, plus a Contact link at the bottom. Cancel and Save sit after all the fields in a footer (`.modal-actions`) that sticks to the bottom of the screen while the form scrolls.
 6. **About** (`src/ui/About.tsx`): opened only from the footer link; not a tab.
 
 **Confirmed scope and exclusions:**
@@ -338,3 +338,4 @@ Each rule below is enforced by the code or tests named; keep them true.
 | 9 | Missing-player roster rows on mobile | — | Rows with class `missing` keep the table layout at ≤600px. | Not exercised with real data. | No |
 | 10 | Priority granularity | ★ Preferred is binary. | Ties break by roster order. | No full ranking; the owner hasn't asked for one. | Yes, if requested |
 | 11 | Players with no positions | — | `LineupGrid` (`every` on an empty list) treats them as goalies; `isGoalieOnly` treats them as skaters. `validateRoster` reports `no-positions`. | Only reachable through an old saved custom player or a data record with no positions; the UI can't create one. | No (fix only if it matters) |
+| 12 | Lineup slot rows on phones | — | At 390px and 360px, each Daily Lineup Slots row is wider than the dialog: the G toggle is cut off and the remove (×) button sits off-screen, reachable only by scrolling the dialog sideways. Found on 2026-10-21; the overflow was already there before the Cancel/Save move. | Not fixed; outside that change. | No (fix when authorized) |

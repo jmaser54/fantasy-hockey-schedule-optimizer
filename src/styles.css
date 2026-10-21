@@ -306,6 +306,8 @@ textarea { min-height: 140px; resize: vertical; font-family: inherit; }
 /* Modal */
 .backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / 40%); z-index: 50; display: flex; justify-content: center; align-items: flex-start; padding: 40px 12px; overflow-y: auto; }
 .modal { width: min(720px, 100%); }
+/* Sticky so Cancel/Save stay visible while the backdrop scrolls a long form. */
+.modal-actions { position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--border); background: var(--surface); border-radius: 0 0 var(--radius) var(--radius); }
 .field { display: grid; gap: 4px; }
 .field label { font-size: 12px; font-weight: 600; color: var(--muted); }
 .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
