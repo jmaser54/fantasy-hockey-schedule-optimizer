@@ -118,19 +118,19 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               Restore 2027 Defaults
             </button>
           </div>
+          <div className="modal-actions">
+            <button className="btn ghost" onClick={onClose}>
+              Cancel
+            </button>
+            <button className="btn primary" disabled={hasErrors} onClick={save}>
+              Save
+            </button>
+          </div>
           <div className="settings-foot">
             <button className="link-btn" onClick={() => setContact(true)}>
               Contact
             </button>
           </div>
-        </div>
-        <div className="modal-actions">
-          <button className="btn ghost" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn primary" disabled={hasErrors} onClick={save}>
-            Save
-          </button>
         </div>
       </div>
     </div>

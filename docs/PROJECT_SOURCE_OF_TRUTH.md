@@ -26,7 +26,7 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`):
    - Summary cards, a player × date grid, and a day editor with Start/Sit.
    - This page *is* "the optimizer"; there's no separate optimizer page.
 4. **Trade Lab** (`src/ui/Trades.tsx`): try drops and adds and compare games in the lineup, current vs proposed. "Update Roster" applies the proposal.
-5. **League Settings** (modal, `src/ui/Settings.tsx`): roster size, IR slots, lineup slots and playoff rounds, plus a Contact link at the bottom. Cancel and Save sit after all the fields in a footer (`.modal-actions`) that sticks to the bottom of the screen while the form scrolls.
+5. **League Settings** (modal, `src/ui/Settings.tsx`): roster size, IR slots, lineup slots and playoff rounds, plus a Contact link at the bottom. Cancel and Save (`.modal-actions`) sit in normal flow below "Add Round" / "Restore 2027 Defaults" and above Contact, and scroll with the form (not sticky; owner decision).
 6. **About** (`src/ui/About.tsx`): opened only from the footer link; not a tab.
 
 **Confirmed scope and exclusions:**
