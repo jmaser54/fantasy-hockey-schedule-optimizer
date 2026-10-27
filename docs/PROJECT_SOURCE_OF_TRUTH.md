@@ -266,7 +266,7 @@ Each rule below is enforced by the code or tests named; keep them true.
 - `deploy-pages.yml`:
   - Triggers: every push (it deploys only when the ref is the repo's **default branch**, currently `claude/practical-faraday-ti8p02`), plus manual runs and calls from the refresh workflow.
   - Build: `BASE_PATH=/<repo>/ npx vite build`, then uploads **`dist/` only**.
-  - Afterwards, `scripts/smoke-test.mjs` checks the live URL in headless Chromium:
+  - Afterwards, `scripts/smoke-test.mjs` checks the live URL in headless Chromium (Playwright 1.56.1, installed in the job; the job runs on `ubuntu-24.04`, see §G 15):
     - the live data matches the committed snapshot, and Rankings shows 32 teams;
     - the data status chip and paste mode as the Roster default;
     - the Lineup heading matches `/of \d+ scheduled games fit your lineup/`;
@@ -322,6 +322,7 @@ Each rule below is enforced by the code or tests named; keep them true.
 14. **Contact return flow.**
     - `takeContactReturn()` runs once in `App`'s toast state initializer and strips `?contact=sent`, keeping the hash.
     - `_next` must stay an absolute URL built at runtime (`contactReturnUrl`).
+15. **Smoke-test runner pin.** On 2026-10-27, `ubuntu-latest` moved to Ubuntu 26.04, and Playwright 1.56.1 refused to install Chromium there ("does not support chromium on ubuntu26.04-x64"). That failed the deploy smoke test, which the daily refresh also runs. The `smoke-test` job in `deploy-pages.yml` is pinned to `ubuntu-24.04`; the other jobs don't use Playwright and stay on `ubuntu-latest`. Unpin it only together with a Playwright upgrade that supports the newer image.
 
 ## H. Open questions and discrepancies
 
