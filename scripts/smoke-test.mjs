@@ -89,7 +89,10 @@ try {
   if (!/of \d+ scheduled games fit your lineup/.test(heading)) fail(`lineup heading unexpected: ${heading}`);
   console.log(`lineup OK: "${heading}"`);
 
-  await page.reload({ waitUntil: 'networkidle' });
+  // gtag can keep the network busy, so don't wait for network idle; wait for the
+  // reloaded Lineup page (#lineup) to render its heading instead.
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('.panel-head h2', { hasText: /of \d+ scheduled games fit your lineup/ }).first().waitFor({ timeout: 30_000 });
   await page.getByRole('tab', { name: /^Roster/ }).click();
   const counts = await page.locator('.counts').innerText();
   if (!/Roster\s+1\//.test(counts)) fail(`roster not restored after reload: ${counts}`);
