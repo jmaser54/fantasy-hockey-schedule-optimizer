@@ -71,8 +71,10 @@ page.on('pageerror', (e) => errors.push(String(e)));
 const isAnalytics = (url = '') => /googletagmanager\.com|google-analytics\.com/.test(url);
 page.on('console', (m) => m.type() === 'error' && !isAnalytics(m.location().url) && errors.push(m.text()));
 try {
-  await page.goto(base, { waitUntil: 'networkidle' });
+  // Not network idle (gtag can keep a request open): wait for the loaded data instead.
+  await page.goto(base, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('table tbody tr', { timeout: 30_000 });
+  await page.locator('.data-status', { hasText: 'NHL data' }).waitFor({ timeout: 30_000 });
   const rows = await page.locator('table tbody tr').count();
   if (rows !== live.teams.length) fail(`rankings show ${rows} teams, expected ${live.teams.length}`);
   const chip = await page.locator('.data-status').innerText();
