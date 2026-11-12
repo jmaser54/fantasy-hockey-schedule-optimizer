@@ -55,8 +55,9 @@ function TeamRankings({ onGoRoster }: { onGoRoster: () => void }) {
         { key: 'games', label: 'Total', title: `All games in ${selected.name}` },
       ]
     : [{ key: 'games', label: 'Games', title: `Games in ${selected.name} (${formatShort(selected.start)} – ${formatShort(selected.end)})` }];
+  // Next Week is about the week ahead: no Full Playoffs context column there.
   const summaryCol: Column | null =
-    !isAll && allWindow ? { key: 'summary', label: 'Full Playoffs', title: 'All rounds combined, for context. Not limited to the selected range.' } : null;
+    !isAll && selected.id !== 'week' && allWindow ? { key: 'summary', label: 'Full Playoffs', title: 'All rounds combined, for context. Not limited to the selected range.' } : null;
   const numericKeys = [...gameCols.map((c) => c.key), 'light', ...(summaryCol ? ['summary'] : []), 'mine'];
 
   const defaultSort: SortState = { key: 'games', dir: 'desc' };
@@ -112,7 +113,7 @@ function TeamRankings({ onGoRoster }: { onGoRoster: () => void }) {
           </span>
         </div>
         <div className="table-wrap">
-          <table>
+          <table className={selected.id === 'week' ? 'next-week' : undefined}>
             <thead>
               <tr>
                 <th className="n">#</th>

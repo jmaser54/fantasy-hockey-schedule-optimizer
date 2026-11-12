@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import type { Position } from './types.ts';
 import { maxBipartiteMatching } from './matching.ts';
-import { canStartTogether, expandSeats, optimizeDates, optimizeDay, optimizeRange, sitPlayer, startPlayer, type DayOverride, type LineupPlayer } from './optimizer.ts';
+import { canPlaySeat, canStartTogether, expandSeats, isEmptyOverride, moveInLineup, optimizeDates, optimizeDay, optimizeRange, sitPlayer, startPlayer, type DayOverride, type LineupPlayer } from './optimizer.ts';
 import { player, sched, slots } from './testUtils.ts';
 
 describe('optimizer — hand-checkable cases', () => {
@@ -165,13 +166,25 @@ describe('optimizer — hand-checkable cases', () => {
     const roster = [player('X', 'AAA', ['D']), player('Y', 'BBB', ['C'], true), player('Z', 'CCC', ['C']), player('V', 'AAA', ['C']), player('U', 'BBB', ['C'])];
     const seats = expandSeats(slots({ C: ['C'] }));
     const day = optimizeDay('2027-03-01', roster, seats, s, { start: ['X', 'Y', 'Z', 'V', 'U', 'gone'], sit: [] });
-    // X: no C slot. Y: on IR. Z: no game. gone: not on roster. U: the one C seat already holds V (started first).
+    // X: no C slot. Y: on IR. gone: not on roster. U and Z: the one C seat already holds V
+    // (started players with a game are seated before started players without one).
     expect(day.manualIssues).toHaveLength(5);
     expect(day.manualIssues.join(' ')).toMatch(/IR/);
-    expect(day.manualIssues.join(' ')).toMatch(/no game/);
     expect(day.seats.map((x) => x.playerId)).toEqual(['V']);
     expect(day.usable).toBe(1);
     expect(canStartTogether([roster[3]!, roster[4]!], seats)).toBe(false);
+  });
+
+  it('a started player without a game takes the seat: the user’s call, even though it loses a game', () => {
+    const s = sched([['2027-03-01', 'AAA', 'BBB']]);
+    const roster = [player('V', 'AAA', ['C']), player('Z', 'CCC', ['C'])];
+    const seats = expandSeats(slots({ C: ['C'] }));
+    expect(optimizeDay('2027-03-01', roster, seats, s).seats.map((x) => x.playerId)).toEqual(['V']);
+    const day = optimizeDay('2027-03-01', roster, seats, s, { start: ['Z'], sit: ['V'] });
+    expect(day.seats.map((x) => x.playerId)).toEqual(['Z']);
+    expect(day.usable).toBe(0);
+    expect(day.optimalUsable).toBe(1);
+    expect(day.manualIssues).toEqual([]);
   });
 
   it('reports players with no compatible slot', () => {
@@ -344,5 +357,124 @@ describe('player priorities and daily choices', () => {
     expect(r.players.find((p) => p.playerId === 'irC')!.usable).toBe(0);
     expect(r.usable).toBe(r.days.reduce((n, d) => n + d.seats.filter((x) => x.playerId).length, 0));
     expect(r.goalieUsable).toBe(3);
+  });
+});
+
+describe('exact daily lineups (day editor moves)', () => {
+  const s = sched([['2027-03-01', 'AAA', 'BBB']]);
+  const roster = [player('C1', 'AAA', ['C']), player('C2', 'BBB', ['C']), player('C3', 'CCC', ['C']), player('G1', 'AAA', ['G']), player('G2', 'BBB', ['G'])];
+  const seats = expandSeats(slots({ C: ['C'], UTIL: ['C', 'LW', 'RW', 'D'], G: [2, ['G']] }));
+  const auto = optimizeDay('2027-03-01', roster, seats, s);
+  const lineupOf = (d: ReturnType<typeof optimizeDay>) => Object.fromEntries(d.seats.map((x) => [x.seat.key, x.playerId ?? null]));
+
+  it('is used exactly: only the moved players change, nothing refills', () => {
+    const before = lineupOf(auto);
+    expect(Object.values(before).sort()).toEqual(['C1', 'C2', 'G1', 'G2']);
+    // Swap the C-slot player with C3 (no game), and move the goalie in G#1 to the bench.
+    const lineup = { ...before, 'C#0': 'C3', 'G#1': null };
+    const day = optimizeDay('2027-03-01', roster, seats, s, { start: [], sit: [], lineup });
+    expect(lineupOf(day)).toEqual(lineup);
+    expect(day.usable).toBe(2); // C2 and G1; C3 has no game, G2's seat stays empty
+    expect(day.optimalUsable).toBe(4);
+    expect(day.manual).toBe(true);
+    expect(day.manualIssues).toEqual([]);
+  });
+
+  it('keeps goalies and skaters apart, strictly per slot', () => {
+    const [c, , , g] = roster;
+    const seat = (key: string) => seats.find((x) => x.key === key)!;
+    expect(canPlaySeat(g!, seat('UTIL#0'))).toBe(false);
+    expect(canPlaySeat(g!, seat('C#0'))).toBe(false);
+    expect(canPlaySeat(c!, seat('G#0'))).toBe(false);
+    expect(canPlaySeat(c!, seat('UTIL#0'))).toBe(true);
+    expect(canPlaySeat({ positions: ['G'] }, { accepts: ['C', 'G'] })).toBe(false); // a slot that takes skaters never takes a goalie
+    const day = optimizeDay('2027-03-01', roster, seats, s, { start: [], sit: [], lineup: { 'C#0': 'C1', 'UTIL#0': 'G2', 'G#0': 'C2', 'G#1': 'G1' } });
+    expect(lineupOf(day)).toEqual({ 'C#0': 'C1', 'UTIL#0': null, 'G#0': null, 'G#1': 'G1' });
+    expect(day.manualIssues).toHaveLength(2);
+  });
+
+  it('is ignored, visibly, when the league’s slots changed', () => {
+    const day = optimizeDay('2027-03-01', roster, seats, s, { start: [], sit: [], lineup: { 'C#0': 'C3', 'G#0': null } });
+    expect(lineupOf(day)).toEqual(lineupOf(auto));
+    expect(day.manualIssues.join(' ')).toMatch(/slots changed/);
+  });
+
+  it('counts as a manual change even with every seat empty', () => {
+    expect(isEmptyOverride({ start: [], sit: [], lineup: { 'C#0': null } })).toBe(false);
+  });
+});
+
+describe('lineup slot order', () => {
+  it('puts F slots first and goalie slots last, keeping every other slot (UTIL included) in league order', () => {
+    const order = expandSeats([
+      ...slots({ C: ['C'], LW: ['LW'], D: ['D'], UTIL: ['C', 'LW', 'RW', 'D'], G: [2, ['G']] }),
+      { id: 'F', label: 'F', count: 2, accepts: ['C', 'LW', 'RW'] }, // added after G, as League Settings' "Add Slot" does
+    ]).map((x) => x.label);
+    expect(order).toEqual(['F', 'F', 'C', 'LW', 'D', 'UTIL', 'G', 'G']);
+  });
+
+  it('leaves a league without F slots in its own order (goalies last)', () => {
+    expect(expandSeats(slots({ G: ['G'], C: ['C'], UTIL: ['C', 'LW', 'RW', 'D'] })).map((x) => x.label)).toEqual(['C', 'UTIL', 'G']);
+  });
+});
+
+describe('day editor moves (moveInLineup)', () => {
+  const seats = expandSeats(slots({ C: ['C'], LW: ['LW'], UTIL: ['C', 'LW', 'RW', 'D'], G: [2, ['G']] }));
+  const ps = new Map([
+    ['c1', { positions: ['C'] as Position[] }],
+    ['c2', { positions: ['C'] as Position[] }],
+    ['lw', { positions: ['LW'] as Position[] }],
+    ['d', { positions: ['D'] as Position[] }],
+    ['g1', { positions: ['G'] as Position[] }],
+    ['g2', { positions: ['G'] as Position[] }],
+  ]);
+  const base = { 'C#0': 'c1', 'LW#0': 'lw', 'UTIL#0': 'd', 'G#0': 'g1', 'G#1': null };
+
+  it('swaps a starter with a bench player: only those two change', () => {
+    expect(moveInLineup(base, seats, ps, 'c1', undefined, 'c2')).toEqual({ ...base, 'C#0': 'c2' });
+    expect(moveInLineup(base, seats, ps, 'c2', 'C#0', 'c1')).toEqual({ ...base, 'C#0': 'c2' }); // from the bench side
+  });
+
+  it('swaps two starters only when each can play the other’s slot', () => {
+    expect(moveInLineup(base, seats, ps, 'c1', 'UTIL#0', 'd')).toBeNull(); // d can't play C
+    expect(moveInLineup({ ...base, 'UTIL#0': 'c2' }, seats, ps, 'c1', 'UTIL#0', 'c2')).toEqual({ ...base, 'C#0': 'c2', 'UTIL#0': 'c1' });
+  });
+
+  it('moves into an empty slot and leaves the old one empty', () => {
+    expect(moveInLineup(base, seats, ps, 'g1', 'G#1', undefined)).toEqual({ ...base, 'G#0': null, 'G#1': 'g1' });
+    expect(moveInLineup(base, seats, ps, 'g2', 'G#1', undefined)).toEqual({ ...base, 'G#1': 'g2' });
+    expect(moveInLineup(base, seats, ps, 'lw', undefined, undefined)).toEqual({ ...base, 'LW#0': null }); // to the bench
+  });
+
+  it('never moves a goalie into a skater slot or a skater into a goalie slot', () => {
+    expect(moveInLineup(base, seats, ps, 'g2', 'UTIL#0', 'd')).toBeNull();
+    expect(moveInLineup(base, seats, ps, 'g1', 'C#0', 'c1')).toBeNull();
+    expect(moveInLineup(base, seats, ps, 'c2', 'G#1', undefined)).toBeNull();
+    expect(moveInLineup(base, seats, ps, 'g1', undefined, 'c2')).toBeNull(); // c2 can't take g1's G slot
+  });
+
+  it('rejects a stale target and bench-to-bench moves', () => {
+    expect(moveInLineup(base, seats, ps, 'c2', 'C#0', 'lw')).toBeNull(); // C#0 holds c1, not lw
+    expect(moveInLineup(base, seats, ps, 'c2', undefined, 'g2')).toBeNull();
+  });
+
+  it('result is honored exactly by the optimizer', () => {
+    const s = sched([['2027-03-01', 'AAA', 'BBB']]);
+    const roster = [player('c1', 'AAA', ['C']), player('c2', 'CCC', ['C']), player('g1', 'BBB', ['G'])];
+    const seats2 = expandSeats(slots({ C: ['C'], G: ['G'] }));
+    const lineup = moveInLineup({ 'C#0': 'c1', 'G#0': 'g1' }, seats2, new Map(roster.map((p) => [p.id, p])), 'c1', undefined, 'c2')!;
+    const day = optimizeDay('2027-03-01', roster, seats2, s, { start: [], sit: [], lineup });
+    expect(day.seats.map((x) => x.playerId)).toEqual(['c2', 'g1']);
+    expect(day.usable).toBe(1); // c2 has no game: the user's call
+  });
+});
+
+describe('automatic lineup with an F slot shown first', () => {
+  it('fills a player’s own slot before a flexible one', () => {
+    const s = sched([['2027-03-01', 'AAA', 'BBB']]);
+    const seats = expandSeats([...slots({ C: ['C'], LW: ['LW'], G: ['G'] }), { id: 'F', label: 'F', count: 1, accepts: ['C', 'LW', 'RW'] }]);
+    expect(seats.map((x) => x.label)).toEqual(['F', 'C', 'LW', 'G']);
+    const day = optimizeDay('2027-03-01', [player('lw', 'AAA', ['LW']), player('c', 'BBB', ['C'])], seats, s);
+    expect(Object.fromEntries(day.seats.map((x) => [x.seat.label, x.playerId ?? null]))).toEqual({ F: null, C: 'c', LW: 'lw', G: null });
   });
 });

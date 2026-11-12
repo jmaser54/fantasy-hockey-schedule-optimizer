@@ -11,7 +11,7 @@ Labels used below:
 
 Last reviewed against commit `c9af699` (2026-10-19); sections touched by the 2026-11-12 changes reviewed against the code.
 
-**Testing repo:** `jmaser54/fantasy-hockey-schedule-optimizer-testing` (default branch `main`, site https://jmaser54.github.io/fantasy-hockey-schedule-optimizer-testing/) is where the owner tries changes before they come here. Rounds 1–3 (its commits `5c2d2dc`, `952152a`, `004f18f`) were brought to live on 2026-11-12. The testing repo has its own `CLAUDE.md` and copy of this document, and no GA tag.
+**Testing repo:** `jmaser54/fantasy-hockey-schedule-optimizer-testing` (default branch `main`, site https://jmaser54.github.io/fantasy-hockey-schedule-optimizer-testing/) is where the owner tries changes before they come here. Rounds 1–3 (its commits `5c2d2dc`, `952152a`, `004f18f`) and rounds 4–8 (`847d860`, `80ef25a`, `9a0a2e4`, `67ba9b7`, `f6bfde0`) were brought to live on 2026-11-12. The testing repo has its own `CLAUDE.md` and copy of this document, and no GA tag.
 
 ---
 
@@ -25,7 +25,7 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`). The site opens on T
 1. **Team Schedules** (`src/ui/Rankings.tsx`, short label "Schedules" on phones): which NHL teams play the most, and on light nights, in the selected window.
 2. **Roster** (`src/ui/Roster.tsx`): paste or search players. Set position eligibility, Active/IR and ★ Preferred, then remove or clear. No period toggle here; its Games column is always next week.
 3. **Lineup** (`src/ui/Lineup.tsx`): the optimizer's results.
-   - Summary cards, a player × date grid, and a day editor with Start/Sit.
+   - Summary cards, a player × date grid, and an ESPN-style day editor (tap a player's position button, then a highlighted position).
    - This page *is* "the optimizer"; there's no separate optimizer page.
 4. **Trade Lab** (`src/ui/Trades.tsx`): try drops and adds and compare games in the lineup, current vs proposed. "Current" is always the saved roster. "Update Roster" applies the tested moves after a confirmation.
 5. **League Settings** (modal, `src/ui/Settings.tsx`): roster size, IR slots, lineup slots and playoff rounds. Cancel and Save (`.modal-actions`) sit in normal flow below "Add Round" / "Restore 2027 Defaults" at the bottom of the form, and scroll with it (not sticky; owner decision). There's no Contact link in it any more.
@@ -58,7 +58,8 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`). The site opens on T
 - League Settings button: gear icon plus the words "League Settings", at every width (`.tabbar .settings-btn`).
 - Setup line under the period bar: "<roster size> roster · <IR slots> IR · <starters> starters", e.g. "22 roster · 2 IR · 13 starters" (starters = the sum of lineup slot counts, `activeSlotCount`). In Playoffs mode it adds the selected round, e.g. "· Round 1: Feb 22 – Mar 7, 2027". Clicking it opens League Settings (`SetupLine` in `App.tsx`). It also shows on Roster, where there's no period bar.
 - Roster Games column header: "Games next week" (on phones, rows read "N games next week").
-- Trade Lab, under the comparison table, two lines: "Test any move before you make it — a trade, a waiver pickup, a drop — and see how it changes your lineup." then the original note, restored word for word: "Both columns use optimal daily lineups. This compares schedule opportunity only, not player quality."
+- Trade Lab, under the comparison table, two lines (owner's exact wording, round 7): "Test a trade or pickup before you make it and see how it changes your lineup." then "Compares the number of games players can start in your lineup based on your league’s roster positions and eligibility." Don't reintroduce "optimal daily lineups". It measures schedule opportunity, not player quality.
+- Trade Lab panel order: Add first, then Drop (round 7). On phones Add sits above Drop; on desktop the two sit side by side, Add on the left.
 - Link previews (`index.html`): meta description and `og:description` "Add your roster and see which NHL teams give you the most games that fit your lineup in your fantasy playoffs — plus which pickups are worth it." (reworded in round 2 to drop "usable games"), `og:title` "Fantasy Hockey Playoff Planner", `og:type` "website", `og:url` the **live** URL, `twitter:card` "summary". No `og:image`: the repo has no suitable image, and the owner said not to create one.
 
 ### Visual and UX (Confirmed)
@@ -94,17 +95,28 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`). The site opens on T
 - **Player priorities:** a single ★ Preferred flag per roster player. Default is not preferred.
   - Preferred players win contested spots across the whole selected period.
   - Priorities must never break position eligibility, overfill slots, or leave a fillable spot empty.
-- **Daily manual overrides:** per date, the user can Start or Sit players.
-  - The rest of the lineup refills automatically around those choices, by priority.
-  - A choice on one date never changes other dates.
+- **Daily manual overrides (round 6, owner decision; modeled on ESPN Fantasy's mobile lineup editor, replacing round 5's destination panel):**
+  - Every row has a position button beside the player: the slot label for starters (C, LW, RW, D, UTIL, F, G…) and "BN" for bench players. Empty slots show their button with "Empty".
+  - Tapping a player's button enters move mode: that button turns solid blue, the hint reads "Moving <name>: tap a highlighted position." (with Cancel), and only the positions they can take are highlighted (outlined in blue). All other buttons are disabled. Tapping the selected button again cancels.
+  - Valid positions (`moveInLineup` in `optimizer.ts`, unit-tested): for a starter, another starter's slot if each can play the other's slot, an empty slot they can play, a bench player who can play their slot, or an empty "BN" row (move to the bench; the slot becomes Empty). For a bench player, a starter's slot or an empty slot they can play.
+  - Tapping a highlighted position swaps exactly those two players, or moves the player there and leaves the old slot Empty. A "Lineup saved." toast confirms it.
+  - **Strict per-slot eligibility** (`canPlaySeat`): a slot that takes any skater position never takes a goalie, and a goalie slot takes goalies only.
+  - **Only the players involved move.** The day saves an exact lineup (`DayOverride.lineup`: every seat key → player id or null), used as is: no re-optimizing, no refilling, nobody else moves.
+  - A move is never warned about, confirmed or blocked because it loses games; that includes moving in a bench player with no game (counts zero). The day's count just updates.
+  - If a move returns the day to its automatic lineup (same player in every seat), the override is cleared and the dash goes away.
+  - Phones (`pointer: coarse`): position buttons are 52×44px.
+  - The automatic optimal lineup stays the default for every day. A move on one date never changes other dates, the roster, league settings or rounds.
   - Changing a priority updates automatically optimized dates but keeps manual choices.
   - Reset Day, or Reset <period>, removes choices and returns to the priority-aware optimum.
-  - Choices that become invalid (IR, no game, no room, roster change) are ignored *visibly*, never forced into an invalid lineup.
-  - Manually adjusted days are marked: a "Your Changes" badge, an underline on the date in the grid, and an "edited" tag on summary cards.
+  - Choices that become invalid (IR, no room, roster change) are ignored *visibly*, never forced into an invalid lineup.
+  - Manually adjusted days are marked: a "Your Changes" badge, a blue dash under the date in the grid, and an "edited" tag on summary cards. The legend has no entry for the dash (removed in round 7, owner decision).
 - **Day editor:**
   - Selecting a date in the grid scrolls its editor into view below the sticky header. The ← → day arrows don't scroll.
-  - A hint above the grid reads "Select a date to view and edit that day's lineup."
-  - The editor title is "Lineup for <date>", with In Lineup and Sitting Out sections.
+  - The date headers are buttons (`.day-btn`). The hint above the grid reads "Tap a day to change that day's lineup."
+  - The editor title is "Lineup for <date>", with In Lineup and Bench sections and the instruction "Tap a player’s position to move them." The Bench lists every non-IR player not in the lineup, including those with no game ("No game").
+  - **Slot order (round 7, owner decision):** `expandSeats` lists F slots (two or more forward positions, no D or G) first, then every other slot in the league's order (UTIL stays where it is), then goalie-only slots last. This applies even when F was added after G in League Settings, whose own list order is unchanged. Seat keys don't depend on order, so saved lineups are unaffected.
+  - The automatic lineup tries each player's most specific slots first (`eligibleSeatIndices` sorts by how many positions a slot accepts), so showing F first doesn't put a LW in F while a LW slot stays empty.
+  - The day view shows no priority or competition logic: no ★ toggles, no "lowest-priority" line, no "<slots> full (…)" lists, no Sit/Start buttons. (The week grid's hover tooltips still give unused-game reasons.)
 
 ### Counts and summary metrics (Confirmed, commit `bfbc1a7` plus the priorities work)
 - A player's **In Lineup** count = games where the player is actually seated in the *final* lineup, including manual choices.
@@ -125,6 +137,7 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`). The site opens on T
 - Team Schedules:
   - The tab always shows, in order: "Games per Night", "NHL Team Schedules", then "Schedule Grid". The old "Team Rankings / Schedule Grid" toggle is gone (owner decision, 2026-11-12). Rankings are consistent with the selected window; columns sort ascending and descending.
   - The Schedule Grid covers the selected window: 7 days in Next Week, the full window in Playoffs or Custom.
+  - NHL Team Schedules shows a "Full Playoffs" context column for a single round or a Custom period, but **not in Next Week** (owner decision, round 8). In Next Week the table (`table.next-week`) lets its headers wrap on phones so every column, Your Players included, fits at 360px. The Full Playoffs view itself (rounds + Total) is unchanged.
   - **Roster highlight:** grid rows for teams with at least one roster player get `tr.mine-row`: light-blue row header with a blue left edge, and light-blue off-day cells, also on hover. Game cells keep their grey (`--surface-2`) background. The existing `mine-dot` stays. No highlight with an empty roster.
   - Games-per-night bars show that night's matchups; "Your Players" counts are clickable.
   - The Schedule Grid shows daily NHL game counts, with dates larger than the counts, and has no mouse-following hover lines.
@@ -212,12 +225,14 @@ Each rule below is enforced by the code or tests named; keep them true.
 3. **Eligibility and capacity.**
    - A player fills at most one seat, and only a seat whose `accepts` includes one of their effective positions.
    - Seats come from `expandSeats(league.slots)`; no seat holds two players; IR players never get seats.
-4. **Daily choices** (`DayOverride {start[], sit[]}`, keyed by date in `state.manual`):
+4. **Daily choices** (`DayOverride {start[], sit[], lineup?}`, keyed by date in `state.manual`):
+   - **Exact lineup** (`lineup`, written by the day editor): used seat by seat with no re-optimizing or refilling. Entries for players who left the roster, went on IR or can't play that seat (`canPlaySeat`) are dropped and reported in `manualIssues`. If the league's seats no longer match (slots changed), the whole lineup is ignored with an issue and the day is automatic. `removePlayer`/`replacePlayer` empty or rename the seat. `isEmptyOverride` treats any `lineup` as a change. The loader keeps `lineup`; older saves without it work as before.
+   - Without `lineup` (older saves), the start/sit rules below apply:
    - Starts are placed first, then everyone else not sat, by priority.
-   - A start is honored only if the player is on the roster, not on IR, has a game, and fits among the other starts. Otherwise it's skipped and reported in `DayResult.manualIssues`.
+   - A start is honored if the player is on the roster, not on IR, and fits among the other starts. Otherwise it's skipped and reported in `DayResult.manualIssues`. Started players with a game are placed before started players without one.
    - Sat players get the reason `{kind: 'sat'}`.
    - An empty override deletes the date entry (`reducer` `setManual`).
-   - A player without a game can't be started; the old "Started with no game" state no longer exists.
+   - **A started player without a game takes a seat and counts zero** (round 4, owner decision). This reverses the earlier rule that such starts were ignored. It's needed so a swap that loses games always goes through.
 5. **Scheduled ≠ in lineup.**
    - `summarize` counts `scheduled` for every rostered player whose team plays, including IR players, and `usable` only when `seatKey` is set.
    - `DayResult.scheduled` excludes IR players.
@@ -362,7 +377,7 @@ Each rule below is enforced by the code or tests named; keep them true.
 | 4 | Contact delivery | Reuse Letter Ladder's FormSubmit recipient and settings; the address is public. | Standard POST to `formsubmit.co/jmaser4@gmail.com`; simulated tests only. | Real delivery is unverified; FormSubmit may send a one-time activation email for the new site. | No (verify with a real message) |
 | 5 | ESPN-only / `inactive` players | Remove the UI badge and labels; keep the data flag. | About 808 ESPN-only players use ESPN's team; retired players (e.g. Toews) still count their old team's games. | Whether to filter or label stale players is undecided. | Yes |
 | 6 | Stale repo docs | — | `IMPLEMENTATION.md` still mentions "IR with eligibility rules", "IR slots and rule", Trade Lab "undo, back to current roster", "66/66 passing" and "usable player-games". `README.md` is titled "Playoff Schedule Optimizer" and says "usable player-games". | These describe removed or renamed behavior. This document is current. | No (update when authorized) |
-| 7 | Mobile Phases 2–3 | Do the mobile work in reviewed phases; desktop stays unchanged. | Phase 1 is done. | Not done: Lineup per-player totals hidden at the far right, legend and cards long; Team Schedules hidden columns and cut-off date chips, 14px bars; Trade Lab Add below the Drop list; period bar wraps to 2 lines. | Yes (the owner reviews each phase) |
+| 7 | Mobile Phases 2–3 | Do the mobile work in reviewed phases; desktop stays unchanged. | Phase 1 is done. | Not done: Lineup per-player totals hidden at the far right, legend and cards long; Team Schedules hidden columns and cut-off date chips, 14px bars; period bar wraps to 2 lines. | Yes (the owner reviews each phase) |
 | 8 | Touch target sizes | Aim for about 40–44px where practical. | Position toggles are 32×34 (space-limited); Lineup grid cells weren't enlarged. | — | No |
 | 9 | Missing-player roster rows on mobile | — | Rows with class `missing` keep the table layout at ≤600px. | Not exercised with real data. | No |
 | 10 | Priority granularity | ★ Preferred is binary. | Ties break by roster order. | No full ranking; the owner hasn't asked for one. | Yes, if requested |

@@ -65,7 +65,9 @@ function mapPlayerInManual(manual: AppState['manual'], from: string, to: string 
   const out: AppState['manual'] = {};
   const fix = (ids: string[]) => [...new Set(ids.flatMap((id) => (id !== from ? [id] : to ? [to] : [])))];
   for (const [date, o] of Object.entries(manual)) {
-    const next = { start: fix(o.start), sit: fix(o.sit) };
+    const next: DayOverride = { start: fix(o.start), sit: fix(o.sit) };
+    // An exact lineup keeps its seats; a removed player leaves their seat empty.
+    if (o.lineup) next.lineup = Object.fromEntries(Object.entries(o.lineup).map(([seat, id]) => [seat, id === from ? to : id]));
     if (!isEmptyOverride(next)) out[date] = next;
   }
   return out;
@@ -219,7 +221,8 @@ function loadManual(v: unknown): AppState['manual'] {
   const ids = (x: unknown) => [...new Set(Array.isArray(x) ? x.filter((s): s is string => typeof s === 'string') : [])];
   for (const [date, o] of Object.entries(v)) {
     if (!isValidISODate(date) || !isObj(o)) continue;
-    const next = Array.isArray(o.start) || Array.isArray(o.sit) ? { start: ids(o.start), sit: ids(o.sit) } : { start: ids(Object.values(o)), sit: [] };
+    const next: DayOverride = Array.isArray(o.start) || Array.isArray(o.sit) ? { start: ids(o.start), sit: ids(o.sit) } : { start: ids(Object.values(o)), sit: [] };
+    if (isObj(o.lineup)) next.lineup = Object.fromEntries(Object.entries(o.lineup).map(([seat, id]) => [seat, typeof id === 'string' ? id : null]));
     if (!isEmptyOverride(next)) out[date] = next;
   }
   return out;

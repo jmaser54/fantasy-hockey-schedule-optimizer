@@ -209,3 +209,13 @@ describe('roster operations', () => {
     expect(lp('x', 'AAA', ['C']).onIr).toBe(false);
   });
 });
+
+describe('exact daily lineups in saved state', () => {
+  it('survive a reload, and a removed player leaves their seat empty', () => {
+    let s = reducer(initialState(), { type: 'addPlayers', ids: ['a', 'b'] });
+    s = reducer(s, { type: 'setManual', date: '2027-03-01', override: { start: ['b'], sit: [], lineup: { 'C#0': 'b', 'G#0': null } } });
+    expect(deserialize(serialize(s)).state.manual['2027-03-01']!.lineup).toEqual({ 'C#0': 'b', 'G#0': null });
+    s = reducer(s, { type: 'removePlayer', id: 'b' });
+    expect(s.manual['2027-03-01']!.lineup).toEqual({ 'C#0': null, 'G#0': null });
+  });
+});

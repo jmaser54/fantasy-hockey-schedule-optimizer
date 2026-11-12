@@ -116,9 +116,9 @@ export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
           </table>
         </div>
         <div className="panel-body small muted" style={{ borderTop: '1px solid var(--border)' }}>
-          Test any move before you make it — a trade, a waiver pickup, a drop — and see how it changes your lineup.
+          Test a trade or pickup before you make it and see how it changes your lineup.
           <br />
-          Both columns use optimal daily lineups. This compares schedule opportunity only, not player quality.
+          Compares the number of games players can start in your lineup based on your league’s roster positions and eligibility.
         </div>
       </section>
 
@@ -134,31 +134,6 @@ export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
       )}
 
       <div className="trade-grid">
-        <section className="panel">
-          <div className="panel-head">
-            <h2>Drop</h2>
-            <UsableLabel period={selected.name} />
-          </div>
-          <div className="panel-body">
-            {state.roster.map((e) => {
-              const p = resolve(e.playerId);
-              const dropped = scenario.drops.includes(e.playerId);
-              const b = perPlayer(e.playerId, 'before');
-              return (
-                <label key={e.playerId} className={`check-row ${dropped ? 'dropped' : ''}`}>
-                  <input type="checkbox" checked={dropped} onChange={() => toggleDrop(e.playerId)} />
-                  <span className="name">
-                    {p?.name ?? e.playerId} {p && <PosBadges positions={p.positions} />} <span className="small muted">{p?.team}</span>
-                    {e.onIr && <span className="badge">IR</span>}
-                  </span>
-                  <span className="small num muted">
-                    {b ? `${b.usable}/${b.scheduled}` : ''}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-        </section>
         <section className="panel">
           <div className="panel-head">
             <h2>Add</h2>
@@ -180,6 +155,31 @@ export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
                     ✕
                   </button>
                 </div>
+              );
+            })}
+          </div>
+        </section>
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Drop</h2>
+            <UsableLabel period={selected.name} />
+          </div>
+          <div className="panel-body">
+            {state.roster.map((e) => {
+              const p = resolve(e.playerId);
+              const dropped = scenario.drops.includes(e.playerId);
+              const b = perPlayer(e.playerId, 'before');
+              return (
+                <label key={e.playerId} className={`check-row ${dropped ? 'dropped' : ''}`}>
+                  <input type="checkbox" checked={dropped} onChange={() => toggleDrop(e.playerId)} />
+                  <span className="name">
+                    {p?.name ?? e.playerId} {p && <PosBadges positions={p.positions} />} <span className="small muted">{p?.team}</span>
+                    {e.onIr && <span className="badge">IR</span>}
+                  </span>
+                  <span className="small num muted">
+                    {b ? `${b.usable}/${b.scheduled}` : ''}
+                  </span>
+                </label>
               );
             })}
           </div>

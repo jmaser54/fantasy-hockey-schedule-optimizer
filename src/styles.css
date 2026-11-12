@@ -223,8 +223,13 @@ th.col-selected { box-shadow: inset 0 -2px 0 var(--accent); }
 .lgrid th, .lgrid td { padding: 0; border-bottom: 1px solid var(--border); text-align: center; }
 .lgrid .sticky { position: sticky; left: 0; background: var(--surface); z-index: 1; text-align: left; padding: 5px 10px; min-width: 170px; border-right: 1px solid var(--border); }
 .lgrid .tot { padding: 5px 10px; text-align: right; font-variant-numeric: tabular-nums; }
-.lgrid .dh { min-width: 28px; padding: 4px 0; font-size: 10px; line-height: 1.2; cursor: pointer; }
-.lgrid .dh:hover, .lgrid .dh.sel { background: var(--accent-soft); color: var(--accent); }
+.lgrid .dh { min-width: 28px; padding: 3px 1px 5px; font-size: 10px; line-height: 1.2; }
+/* Day headers are buttons: tap one to open that day's lineup. */
+.lgrid .day-btn {
+  display: block; width: 100%; min-height: 28px; padding: 2px 0; border: 1px solid var(--border-strong); border-radius: 6px;
+  background: var(--surface); color: var(--text); font: inherit; font-weight: 700; line-height: 1.2; cursor: pointer;
+}
+.lgrid .day-btn:hover, .lgrid .day-btn[aria-pressed='true'] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .lgrid td.c { height: 30px; cursor: pointer; }
 /* Daily opportunity/capacity counts above each date column. */
 .lgrid .count-row th { padding: 3px 0; font-size: 10px; font-weight: 600; color: var(--muted); border-bottom: 0; }
@@ -245,21 +250,28 @@ th.col-selected { box-shadow: inset 0 -2px 0 var(--accent); }
 /* Day detail */
 .day-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
 @media (max-width: 760px) { .day-grid { grid-template-columns: 1fr; } }
-.seat { display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px dashed var(--border); }
+.seat { display: grid; grid-template-columns: 48px minmax(0, 1fr); align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px dashed var(--border); }
 .seat:last-child { border-bottom: 0; }
 .seat .who { min-width: 0; }
 .seat .empty-seat { color: var(--muted); font-style: italic; }
-.seat .slot { font-weight: 700; font-size: 12px; color: var(--muted); }
-.bench-item { padding: 6px 0; border-bottom: 1px dashed var(--border); display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 8px; }
-.bench-item .reason { grid-column: 1; }
-.bench-item > button { grid-column: 2; grid-row: 1 / span 2; }
+/* Day editor rows, ESPN-style: a position button beside each player. */
+.pos-btn {
+  width: 48px; min-height: 36px; padding: 0; border: 1px solid var(--border-strong); border-radius: 8px;
+  background: var(--surface-2); color: var(--text); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.pos-btn:hover:not(:disabled) { border-color: var(--accent); }
+.pos-btn.picked { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pos-btn.target { background: var(--accent-soft); border: 2px solid var(--accent); color: var(--accent); }
+.pos-btn.idle:disabled { cursor: default; }
+.pos-btn.off:disabled { opacity: 0.35; cursor: not-allowed; }
+.seat.picking { background: var(--accent-soft); border-radius: 8px; }
+.seat .who { min-width: 0; }
+.swap-hint { margin: 0 0 10px; }
 .star { border: 0; background: none; padding: 0 2px; font-size: 14px; line-height: 1; color: var(--muted); cursor: pointer; vertical-align: -1px; }
 .star[aria-pressed='true'] { color: var(--warn); }
 .star:hover { color: var(--warn); }
-.legend-mark { display: inline-block; width: 12px; height: 2px; background: var(--accent); vertical-align: middle; margin-right: 2px; }
 .lgrid .dh.man { box-shadow: inset 0 -2px 0 var(--accent); }
 .lgrid .dh.issue { box-shadow: inset 0 -2px 0 var(--warn); }
-.bench-item:last-child { border-bottom: 0; }
 .reason { font-size: 12px; color: var(--muted); }
 .day-nav { display: flex; gap: 4px; align-items: center; }
 .day-editor { border-top: 3px solid var(--accent); }
@@ -348,6 +360,7 @@ h3 { font-size: 13px; margin: 16px 0 6px; }
   main { padding: 12px; }
   .brand { font-size: 14px; }
   .team-cell .muted { display: none; }
+  .table-wrap table.next-week th.sortable { white-space: normal; } /* Next Week's Team Schedules headers wrap so the table fits a phone */
   .lgrid .sticky { min-width: 128px; max-width: 150px; white-space: normal; }
   th, td { padding: 6px 8px; }
   .icon-btn .small { display: none; }
@@ -395,6 +408,8 @@ h3 { font-size: 13px; margin: 16px 0 6px; }
   .roster-table select { min-height: 40px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
   .btn.small { min-height: 36px; padding: 4px 12px; }
   .segmented button, .mode-switch button { min-height: 40px; }
+  .pos-btn { width: 52px; min-height: 44px; font-size: 13px; }
+  .seat { grid-template-columns: 52px minmax(0, 1fr); }
   .check-row input[type='checkbox'] { width: 20px; height: 20px; }
   .check-row { min-height: 44px; }
   .link-btn { padding: 10px 0; margin: -10px 0; }
