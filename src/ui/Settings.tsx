@@ -3,13 +3,11 @@ import { DEFAULT_LEAGUE, DEFAULT_PERIODS, activeSlotCount, validateLeague, valid
 import type { LeagueConfig, Period } from '../domain/types.ts';
 import { useApp } from './context.ts';
 import { PosToggles } from './common.tsx';
-import { ContactForm } from './Contact.tsx';
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const { state, dispatch, toast } = useApp();
   const [league, setLeague] = useState<LeagueConfig>(structuredClone(state.league));
   const [periods, setPeriods] = useState<Period[]>(structuredClone(state.periods));
-  const [contact, setContact] = useState(false);
   const leagueErrors = validateLeague(league);
   const periodErrors = periods.map(validatePeriod);
   const hasErrors = leagueErrors.length > 0 || periodErrors.some(Boolean) || periods.length === 0;
@@ -30,17 +28,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const updSlot = (i: number, patch: Partial<LeagueConfig['slots'][number]>) =>
     setLeague({ ...league, slots: league.slots.map((s, k) => (k === i ? { ...s, ...patch } : s)) });
   const updPeriod = (i: number, patch: Partial<Period>) => setPeriods(periods.map((p, k) => (k === i ? { ...p, ...patch } : p)));
-
-  if (contact) {
-    // Same dialog; unsaved settings edits are kept while the contact form is open.
-    return (
-      <div className="backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-        <div className="panel modal" role="dialog" aria-modal="true" aria-label="Contact">
-          <ContactForm onBack={() => setContact(false)} />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -124,11 +111,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             </button>
             <button className="btn primary" disabled={hasErrors} onClick={save}>
               Save
-            </button>
-          </div>
-          <div className="settings-foot">
-            <button className="link-btn" onClick={() => setContact(true)}>
-              Contact
             </button>
           </div>
         </div>

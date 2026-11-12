@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { formatRange } from '../domain/dates.ts';
 import { playerGames } from '../domain/schedule.ts';
 import { matchName, parseRosterText, type MatchResult } from '../domain/rosterImport.ts';
 import { describeIssue, effectivePositions, validateRoster } from '../domain/roster.ts';
@@ -260,11 +261,12 @@ function CustomPlayerForm(props: { initialName: string; initialTeam?: string; te
 }
 
 function RosterTable() {
-  const { state, dispatch, resolve, selected, data, teams, toast } = useApp();
+  const { state, dispatch, resolve, weekWindow: week, data, teams, toast } = useApp();
   const rows = state.roster.map((e) => ({ e, p: resolve(e.playerId) }));
   const order = (r: { e: RosterEntry; p?: Player }) => (r.e.onIr ? 2 : r.p && effectivePositions(r.e, r.p).every((x) => x === 'G') ? 1 : 0);
   rows.sort((a, b) => order(a) - order(b));
-  const dates = new Set(selected.dates);
+  // Roster has no period toggle: games are always for next week.
+  const dates = new Set(week.dates);
   return (
     <section className="panel">
       <div className="table-wrap">
@@ -274,8 +276,8 @@ function RosterTable() {
               <th>Player</th>
               <th>Team</th>
               <th title="Fantasy positions this player can fill">Eligible</th>
-              <th className="n" title={`NHL games in ${selected.name}`}>
-                Games
+              <th className="n" title={`NHL games next week (${formatRange(week.start, week.end)})`}>
+                Games next week
               </th>
               <th>Status</th>
               <th />
@@ -298,7 +300,7 @@ function RosterTable() {
                 );
               }
               const pos = effectivePositions(e, p);
-              const games = playerGames(data.schedule, p, selected.start, selected.end).filter((g) => dates.has(g.date)).length;
+              const games = playerGames(data.schedule, p, week.start, week.end).filter((g) => dates.has(g.date)).length;
               return (
                 <tr key={e.playerId}>
                   <td className="r-name">

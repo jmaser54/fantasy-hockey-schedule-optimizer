@@ -2,13 +2,15 @@ import { useMemo } from 'react';
 import { optimizeDates } from '../domain/optimizer.ts';
 import { describeIssue, toLineupPlayers, validateRoster } from '../domain/roster.ts';
 import type { Player } from '../domain/types.ts';
-import { hasScenario, proposedRoster } from '../state/appState.ts';
+import { proposedRoster } from '../state/appState.ts';
 import { useApp } from './context.ts';
 import { Delta, InfoTip, PlayerSearch, PosBadges } from './common.tsx';
 
 /**
  * Before/after comparison of games that fit optimal lineups. Both sides use the
  * optimizer's best daily lineups, so manual lineup edits don't skew it.
+ * "Current" is always the saved roster. Tested moves change it only through
+ * "Update Roster", after the user confirms the listed changes.
  */
 export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
   const { state, dispatch, resolve, data, windows, selected, summarizeWindow, toast } = useApp();
@@ -56,6 +58,22 @@ export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
   const toggleDrop = (id: string) =>
     set({ ...scenario, drops: scenario.drops.includes(id) ? scenario.drops.filter((d) => d !== id) : [...scenario.drops, id] });
 
+  // What "Update Roster" would change: the proposed roster vs the saved one.
+  const proposedIds = new Set(proposed.map((e) => e.playerId));
+  const added = proposed.filter((e) => !onRoster.has(e.playerId)).map((e) => e.playerId);
+  const dropped = state.roster.filter((e) => !proposedIds.has(e.playerId)).map((e) => e.playerId);
+  const nameOf = (id: string) => resolve(id)?.name ?? id;
+  const applyProposal = () => {
+    const lines = [
+      'Update your saved roster?',
+      ...(added.length ? ['', `Add: ${added.map(nameOf).join(', ')}`] : []),
+      ...(dropped.length ? ['', `Drop: ${dropped.map(nameOf).join(', ')}`] : []),
+    ];
+    if (!confirm(lines.join('\n'))) return;
+    dispatch({ type: 'scenarioApply' });
+    toast('Roster updated.');
+  };
+
   const selRow = rows.find((r) => r.w.id === selected.id) ?? rows[0]!;
   const perPlayer = (id: string, which: 'before' | 'after') => (which === 'before' ? selRow.before : selRow.after).players.find((p) => p.playerId === id);
 
@@ -66,13 +84,9 @@ export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
           <h2>Games in Your Lineup: Current vs Proposed</h2>
           <button
             className="btn small primary"
-            disabled={!hasScenario(scenario)}
-            onClick={() => {
-              if (confirm('Replace your saved roster with the proposed one?')) {
-                dispatch({ type: 'scenarioApply' });
-                toast('Roster saved.');
-              }
-            }}
+            disabled={added.length === 0 && dropped.length === 0}
+            title="Apply the tested adds and drops to your saved roster"
+            onClick={applyProposal}
           >
             Update Roster
           </button>
@@ -102,6 +116,8 @@ export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
           </table>
         </div>
         <div className="panel-body small muted" style={{ borderTop: '1px solid var(--border)' }}>
+          Test any move before you make it — a trade, a waiver pickup, a drop — and see how it changes your lineup.
+          <br />
           Both columns use optimal daily lineups. This compares schedule opportunity only, not player quality.
         </div>
       </section>

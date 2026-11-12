@@ -15,10 +15,10 @@ export function LineupView({ onGoRoster }: { onGoRoster: () => void }) {
   useEffect(() => {
     if (day && !selected.dates.includes(day)) setDay(null);
   }, [selected, day]);
-  // Bring the day editor into view, below the sticky header.
+  // Bring the day editor into view, below the sticky tab bar.
   const showEditor = () => {
     if (!editorRef.current) return;
-    const header = document.querySelector('.topbar')?.getBoundingClientRect().height ?? 0;
+    const header = document.querySelector('.tabbar')?.getBoundingClientRect().height ?? 0;
     const top = editorRef.current.getBoundingClientRect().top + window.scrollY - header - 8;
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     window.scrollTo({ top, behavior: reduce ? 'auto' : 'smooth' });

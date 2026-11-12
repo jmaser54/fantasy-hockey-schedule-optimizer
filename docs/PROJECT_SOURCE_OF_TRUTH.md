@@ -9,25 +9,28 @@ Labels used below:
 - **Implemented**: verified in the current code; not necessarily an explicit requirement.
 - **Open**: unresolved; ask before changing behavior.
 
-Last reviewed against commit `c9af699` (2026-10-19).
+Last reviewed against commit `c9af699` (2026-10-19); sections touched by the 2026-11-12 changes reviewed against the code.
+
+**Testing repo:** `jmaser54/fantasy-hockey-schedule-optimizer-testing` (default branch `main`, site https://jmaser54.github.io/fantasy-hockey-schedule-optimizer-testing/) is where the owner tries changes before they come here. Rounds 1–3 (its commits `5c2d2dc`, `952152a`, `004f18f`) were brought to live on 2026-11-12. The testing repo has its own `CLAUDE.md` and copy of this document, and no GA tag.
 
 ---
 
 ## A. Product purpose and scope
 
-**Playoff Planner** is a guest-first, single-page web app for fantasy hockey managers. It maximizes the number of **player-games that fit the user's daily lineups** during the league's fantasy playoff rounds, using the real NHL schedule. It doesn't maximize fantasy points.
+**Playoff Planner** is a guest-first, single-page web app for fantasy hockey managers. It maximizes the number of **player-games that fit the user's daily lineups** for the next week, the league's fantasy playoff rounds or any custom period, using the real NHL schedule. It's built around the user's roster. It doesn't maximize fantasy points.
 
 Live site: https://jmaser54.github.io/fantasy-hockey-schedule-optimizer/ (GitHub Pages).
 
-Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`):
-1. **Team Schedules** (`src/ui/Rankings.tsx`): which NHL teams play the most, and on light nights, per round, Full Playoffs or a custom range.
-2. **Roster** (`src/ui/Roster.tsx`): paste or search players. Set position eligibility, Active/IR and ★ Preferred, then remove or clear.
+Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`). The site opens on Team Schedules (no hash or an unknown hash → `#rankings`; owner decision, round 2):
+1. **Team Schedules** (`src/ui/Rankings.tsx`, short label "Schedules" on phones): which NHL teams play the most, and on light nights, in the selected window.
+2. **Roster** (`src/ui/Roster.tsx`): paste or search players. Set position eligibility, Active/IR and ★ Preferred, then remove or clear. No period toggle here; its Games column is always next week.
 3. **Lineup** (`src/ui/Lineup.tsx`): the optimizer's results.
    - Summary cards, a player × date grid, and a day editor with Start/Sit.
    - This page *is* "the optimizer"; there's no separate optimizer page.
-4. **Trade Lab** (`src/ui/Trades.tsx`): try drops and adds and compare games in the lineup, current vs proposed. "Update Roster" applies the proposal.
-5. **League Settings** (modal, `src/ui/Settings.tsx`): roster size, IR slots, lineup slots and playoff rounds, plus a Contact link at the bottom. Cancel and Save (`.modal-actions`) sit in normal flow below "Add Round" / "Restore 2027 Defaults" and above Contact, and scroll with the form (not sticky; owner decision).
+4. **Trade Lab** (`src/ui/Trades.tsx`): try drops and adds and compare games in the lineup, current vs proposed. "Current" is always the saved roster. "Update Roster" applies the tested moves after a confirmation.
+5. **League Settings** (modal, `src/ui/Settings.tsx`): roster size, IR slots, lineup slots and playoff rounds. Cancel and Save (`.modal-actions`) sit in normal flow below "Add Round" / "Restore 2027 Defaults" at the bottom of the form, and scroll with it (not sticky; owner decision). There's no Contact link in it any more.
 6. **About** (`src/ui/About.tsx`): opened only from the footer link; not a tab.
+7. **Contact** (`src/ui/Contact.tsx`): opened from the footer's Contact link, in its own dialog (`ContactModal` in `App.tsx`).
 
 **Confirmed scope and exclusions:**
 - Guest-first: no accounts, Firebase or backend. All user state lives in the browser's `localStorage`.
@@ -48,6 +51,15 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`):
 - Roster status options: "Active" and "IR". The old "IR (mark injured)" label is gone.
 - Roster-limit warning: "Your roster has N players, but your current limit is L. If your roster is correct, update your league settings. Otherwise, drop players or move eligible players to IR." (`src/domain/roster.ts` `describeIssue`).
 - Contact intro: "Have feedback? Send us a message."
+- Browser title: "Fantasy Hockey Playoff Planner" (`index.html`); the in-page brand stays "Playoff Planner".
+- Subtitle under the brand: "Plan your next week — and your playoff run. Add your roster to see which pickups are worth it."
+- The "How it works" strip was removed in round 2 (owner decision); only the subtitle stays.
+- Roster shortcut above "NHL Team Schedules": a "+ Add your roster" pill while the roster is empty; then "Roster: N players" with an "Edit" link. Both go to the Roster tab (`RosterPill` in `Rankings.tsx`).
+- League Settings button: gear icon plus the words "League Settings", at every width (`.tabbar .settings-btn`).
+- Setup line under the period bar: "<roster size> roster · <IR slots> IR · <starters> starters", e.g. "22 roster · 2 IR · 13 starters" (starters = the sum of lineup slot counts, `activeSlotCount`). In Playoffs mode it adds the selected round, e.g. "· Round 1: Feb 22 – Mar 7, 2027". Clicking it opens League Settings (`SetupLine` in `App.tsx`). It also shows on Roster, where there's no period bar.
+- Roster Games column header: "Games next week" (on phones, rows read "N games next week").
+- Trade Lab, under the comparison table, two lines: "Test any move before you make it — a trade, a waiver pickup, a drop — and see how it changes your lineup." then the original note, restored word for word: "Both columns use optimal daily lineups. This compares schedule opportunity only, not player quality."
+- Link previews (`index.html`): meta description and `og:description` "Add your roster and see which NHL teams give you the most games that fit your lineup in your fantasy playoffs — plus which pickups are worth it." (reworded in round 2 to drop "usable games"), `og:title` "Fantasy Hockey Playoff Planner", `og:type` "website", `og:url` the **live** URL, `twitter:card` "summary". No `og:image`: the repo has no suitable image, and the owner said not to create one.
 
 ### Visual and UX (Confirmed)
 - **Light theme on every device**, whatever the OS dark-mode setting. `color-scheme: only light` in `src/styles.css` `:root` and in a `<meta>` in `index.html`; `theme-color` is `#ffffff`. Don't add `prefers-color-scheme: dark` rules.
@@ -56,9 +68,11 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`):
 - **Mobile Phase 1 (done, commit `284c651`):**
   - Roster rows show in two lines at ≤600px.
   - All four tabs fit at ≤600px; "Team Schedules" shows as "Schedules", with the accessible name unchanged.
-  - League Settings becomes a gear button on phones.
+  - (Superseded in round 2: League Settings is now a labeled button at every width.)
   - Larger tap targets under `@media (pointer: coarse)`.
 - Phases 2 and 3 of the mobile plan aren't done (§H).
+- **Header:** the brand and subtitle sit above the tabs and scroll away. The tab bar (`.tabbar`) is sticky and holds the tabs plus the League Settings button, so the button stays visible while scrolling (owner decision, round 2). On desktop the button sits at the right of the tabs; at ≤600px it sits on its own row above them.
+- **Custom period rows on phones (≤600px):** the name field and its delete ✕ share the first line, and the dates fill the second line (CSS grid on `.custom-row`).
 
 ### Roster and league rules (Confirmed)
 - **IR is the user's Active/IR selection, nothing else** (commit `2e5c617`).
@@ -100,16 +114,28 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`):
 - Everything recalculates immediately after a priority change, lineup edit, reset, roster change or period change.
 
 ### Schedule and date ranges (Confirmed / Implemented)
-- Windows: each configured round; "Full Playoffs" = the union of round dates (each date counted once); "Custom" = an inclusive start–end range (`App.tsx`, `windows` memo).
-- All dates are `YYYY-MM-DD` in the NHL's Eastern game-date convention. No local-time `Date` math.
+- **Period modes (owner decision, 2026-11-12):** a three-option toggle at the top of the period bar: "Next Week" (default), "Playoffs", "Custom". It switches the period for every tab. The mode is **not saved**: every visit starts on Next Week (`Ready` `mode` state in `App.tsx`).
+  - **Next Week:** next Monday through Sunday (`nextWeek(easternToday())` in `src/domain/dates.ts`; on a Monday it's the following week). The bar shows only the toggle and a small date label, e.g. "Nov 16 – Nov 22, 2026".
+  - **Playoffs:** the round buttons, exactly as before: each configured round plus "Full Playoffs" = the union of round dates (each date counted once). Defaults to Round 1 for new users (`initialState().selection` is the first round's id); a saved round or "Full Playoffs" selection is kept. Rounds are still edited in League Settings. **Don't change the presets** (Round 1 Feb 22–Mar 7, Round 2 Mar 8–21, Round 3 Mar 22–Apr 4, 2027; Full Playoffs Feb 22–Apr 4).
+  - **Custom:** starts with one empty period, plus "Add period". Each period has a name (default "Period N"), any start and end date, and a delete button. "Add Total" adds an optional "Total" window spanning all complete periods; "Remove Total" takes it out. Until a period has valid dates, the tabs show "Enter a start and end date for your period above." Custom periods last only for the visit (not saved; the owner said not to add persistence).
+  - The old saved `custom` range and `setCustom` action are kept so older saves load unchanged, but nothing in the UI uses them any more. A saved `selection` of `'custom'` falls back to Round 1 in Playoffs mode.
+- `windows` in the context is the current mode's windows; `playoffWindows` is always the rounds plus Full Playoffs. Team Schedules uses `playoffWindows` for its "Full Playoffs" context column and the per-round breakdown.
+- All dates are `YYYY-MM-DD` in the NHL's Eastern game-date convention. No local-time `Date` math; "today" for Next Week is the Eastern date (`easternToday`).
 - Light night = at most half the teams play, i.e. ≤8 games with 32 teams (`src/domain/rankings.ts` `isLightNight`).
 - Team Schedules:
-  - Team Rankings and Schedule Grid views; rankings are consistent with the selected round; columns sort ascending and descending.
+  - The tab always shows, in order: "Games per Night", "NHL Team Schedules", then "Schedule Grid". The old "Team Rankings / Schedule Grid" toggle is gone (owner decision, 2026-11-12). Rankings are consistent with the selected window; columns sort ascending and descending.
+  - The Schedule Grid covers the selected window: 7 days in Next Week, the full window in Playoffs or Custom.
+  - **Roster highlight:** grid rows for teams with at least one roster player get `tr.mine-row`: light-blue row header with a blue left edge, and light-blue off-day cells, also on hover. Game cells keep their grey (`--surface-2`) background. The existing `mine-dot` stays. No highlight with an empty roster.
   - Games-per-night bars show that night's matchups; "Your Players" counts are clickable.
   - The Schedule Grid shows daily NHL game counts, with dates larger than the counts, and has no mouse-following hover lines.
 
 ### Trade Lab (Confirmed)
-- "Update Roster" applies the proposal (with confirmation) and shows "Roster saved."
+- **Baseline follows the roster (owner decision, round 2):** "Current" is always the saved roster, so roster changes on the Roster tab show up in Trade Lab automatically. Nothing copies the roster into Trade Lab; there's no separate Trade Lab roster.
+- **"Update Roster" (owner decision, round 3)** sits in the Current vs Proposed panel header and pushes the tested moves into the saved roster:
+  - It's enabled only when the proposed roster differs from the saved one (some tested add or drop would change it); otherwise it's disabled.
+  - It first shows a confirmation listing the players to add and drop ("Update your saved roster? / Add: … / Drop: …"). Cancel applies nothing.
+  - On OK it dispatches `scenarioApply`: the roster becomes the proposed roster (kept players keep their IR and ★ settings), dropped players' daily choices are removed, and the scenario is cleared. Current then equals Proposed, and Roster, Lineup and the rest update immediately. Toast: "Roster updated."
+  - Tested drops and adds (`state.scenario`) never change the saved roster any other way.
 - No Undo button, no "Back to current roster" button, and no Scheduled Games column. Zero change shows "+0".
 - The label "In Lineup / Scheduled" sits above the period name, with an info tip.
 - **Implemented:** both columns use *optimal* daily lineups. Priorities apply; manual daily choices are ignored (§H).
@@ -118,7 +144,7 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`):
 - Priorities and per-date choices survive reloads via the app's `localStorage` persistence. Overrides are keyed by date, so they only affect windows containing that date.
 
 ### About page (Confirmed)
-- A small "About" link sits at the far right of the footer, with the data note ("NHL data updated <date>") on the left. It must not appear in the main navigation or prominently on the main page.
+- A small "About" link sits at the far right of the footer, with the data note ("NHL data updated <date>") on the left and "Contact" just before About. Neither may appear in the main navigation or prominently on the main page.
 - It opens a minimal About view at `#about`, using the app's existing hash navigation. There's no in-page Back button: the tabs and League Settings provide navigation, and the browser Back button returns to the previous tab.
 - Exact copy:
   - Title: "About Playoff Planner".
@@ -130,11 +156,11 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`):
   - No GA page view is sent for About (unchanged analytics behavior).
 
 ### Analytics and contact (Confirmed / Implemented)
-- **GA4:** tag `G-NYB64MVCVE` in `index.html`.
+- **GA4:** tag `G-NYB64MVCVE` in `index.html` (live only; the testing repo removed it so test visits don't count). When bringing changes over from the testing repo, keep this tag.
   - One `page_view` per in-app tab change, with page title "Playoff Planner – <Tab>" (`src/analytics.ts`, called from `App.tsx`).
   - No custom events, no Google Tag Manager, no Firebase.
   - Don't change the Measurement ID without explicit instruction (§H).
-- **Contact:** League Settings → Contact opens a form in the same dialog; Back keeps unsaved settings edits.
+- **Contact:** the footer's "Contact" link (next to About) opens the same form in its own dialog. Its Back button, Escape or a click on the backdrop closes it. Moved out of League Settings on 2026-11-12 (owner decision).
   - Submission is a standard FormSubmit form post with the same recipient and settings as Letter Ladder's `contact.html`:
     - `https://formsubmit.co/jmaser4@gmail.com`;
     - `_template=box`, `_captcha=false`, subject "Playoff Planner — Contact form message".
@@ -148,8 +174,8 @@ Vite 6 + React 18 + TypeScript (strict), Vitest. No runtime dependencies besides
 
 | Area | Files | Role |
 |---|---|---|
-| Entry | `index.html`, `src/main.tsx`, `src/ui/App.tsx` | Shell, tabs (hash routing via `tabFromHash`), the About view (`#about` via `isAboutHash`; `about` state, separate from `tab`), header, data loading, footer (`DataFooter`: data note plus the About link), toast, Settings modal. `Ready` builds the app context and renders the period bar unless `periodBar` is false. |
-| Context | `src/ui/context.ts` | `AppCtx`: `state`, `dispatch`, `data`, `resolve`, `teams`, `windows`, `selected`, `lineupPlayers`, `days`, `summarizeWindow`, `toast`. |
+| Entry | `index.html`, `src/main.tsx`, `src/ui/App.tsx` | Shell, tabs (hash routing via `tabFromHash`), the About view (`#about` via `isAboutHash`; `about` state, separate from `tab`), header (brand, subtitle, how-it-works strip, sticky `.tabbar`), data loading, footer (`DataFooter`: data note plus Contact and About links), `ContactModal`, toast. `Ready` holds the period mode and custom periods, builds the app context, and renders the period bar (`PeriodBar`, `CustomEditor`) unless `periodBar` is false, plus the Settings modal (`overlay`). |
+| Context | `src/ui/context.ts` | `AppCtx`: `state`, `dispatch`, `data`, `resolve`, `teams`, `windows` (current mode), `playoffWindows`, `selected`, `lineupPlayers`, `days`, `summarizeWindow`, `toast`. |
 | State | `src/state/appState.ts` | `AppState`, `reducer` (actions: select, setCustom, setPeriods, setLeague, addPlayers, removePlayer, updateEntry, replacePlayer, addCustomPlayer, clearRoster, setManual, clearManual, scenario, scenarioApply), `proposedRoster`, tolerant `deserialize`/`serialize`, `loadFromStorage`/`saveToStorage`. |
 | Domain (pure, tested) | `src/domain/*` | `optimizer.ts` (daily lineup, priorities, overrides, totals), `matching.ts` (Kuhn bipartite matching), `capacity.ts` (daily group counts, `lineupGroupTotals`), `roster.ts` (`validateRoster`, `describeIssue`, `toLineupPlayers`, `effectivePositions`), `schedule.ts` (`ScheduleIndex`, `teamOnDate`, `playerGameOn`, `playerGames`, `opponent`), `league.ts`, `dates.ts`, `rankings.ts`, `teamSchedules.ts`, `rosterImport.ts`, `names.ts`, `types.ts`. |
 | Data load | `src/data/load.ts`, `src/data/format.ts`, `src/data/validate.ts` | Fetch `public/data/*.json`, validate, build `Dataset`; `isStale` (more than 3 days old); `buildPlayerLookup` (resolves `nhl-<id>`/`espn-<id>` aliases). |
@@ -161,7 +187,7 @@ Vite 6 + React 18 + TypeScript (strict), Vitest. No runtime dependencies besides
 1. `loadDataset()` loads the schedule and player directory.
 2. `lookup.resolve(entry.playerId)` maps saved roster entries to `Player`s. IDs that now resolve under a different ID are migrated once with `replacePlayer` (`App.tsx` effect).
 3. `toLineupPlayers(state.roster, playersMap)` produces `LineupPlayer`s: effective positions, `onIr`, `preferred`.
-4. `optimizeDates(allDates, lineupPlayers, state.league, data.schedule, state.manual)` runs over the union of all window dates, once per date. It returns a `Map<date, DayResult>` (`App.tsx` `days`).
+4. `optimizeDates(allDates, lineupPlayers, state.league, data.schedule, state.manual)` runs over the union of the current mode's window dates, once per date. It returns a `Map<date, DayResult>` (`App.tsx` `days`).
 5. `summarizeWindow(window)` calls `summarize(daysForWindow)` and returns a `RangeResult` with per-player `PlayerTotals {scheduled, usable}` plus day totals.
 6. The Lineup summary cards use `lineupGroupTotals(summary.players, lineupPlayers)`; the grid rows use the same `PlayerTotals`.
 7. Trade Lab runs `optimizeDates` separately for the current and proposed rosters **without** `state.manual`.
@@ -264,10 +290,10 @@ Each rule below is enforced by the code or tests named; keep them true.
 **CI and deployment** (`.github/workflows/`):
 - `ci.yml`: on every push and PR, runs typecheck, tests, `vite build` and the data check.
 - `deploy-pages.yml`:
-  - Triggers: every push (it deploys only when the ref is the repo's **default branch**, currently `claude/practical-faraday-ti8p02`), plus manual runs and calls from the refresh workflow.
+  - Triggers: every push (it deploys only when the ref is the repo's **default branch**: `claude/practical-faraday-ti8p02` in the live repo, `main` in the testing repo), plus manual runs and calls from the refresh workflow.
   - Build: `BASE_PATH=/<repo>/ npx vite build`, then uploads **`dist/` only**.
   - Afterwards, `scripts/smoke-test.mjs` checks the live URL in headless Chromium (Playwright 1.56.1, installed in the job; the job runs on `ubuntu-24.04`, see §G 15):
-    - the live data matches the committed snapshot, and Rankings shows 32 teams;
+    - the live data matches the committed snapshot, and Team Schedules (`#rankings`) shows 32 teams in its first table (`.table-wrap`; the Schedule Grid is a second table);
     - the data status chip and paste mode as the Roster default;
     - the Lineup heading matches `/of \d+ scheduled games fit your lineup/`;
     - the roster persists across a reload;
@@ -295,7 +321,8 @@ Each rule below is enforced by the code or tests named; keep them true.
    - the Lineup heading regex;
    - the Roster tab name `/^Roster/`;
    - the "Paste player names" label;
-   - the "NHL data" status chip.
+   - the "NHL data" status chip;
+   - the Team Schedules table selector (`.table-wrap table`) and the `#rankings` start URL.
 
    Renaming these without updating `scripts/smoke-test.mjs` fails the post-deploy job.
 4. **Global CSS selectors leak.**
@@ -304,7 +331,7 @@ Each rule below is enforced by the code or tests named; keep them true.
 5. **Dark mode.**
    - A leftover `prefers-color-scheme: dark` block made phones render dark after the theme was reverted.
    - Keep `color-scheme: only light`; add no dark-mode rules.
-6. **Accessible names.** Hiding text with CSS for mobile (`label-full`/`label-short`) removes it from the accessibility tree. The Schedules tab needs `aria-label`; the gear button keeps `aria-label="League Settings"`.
+6. **Accessible names.** Hiding text with CSS for mobile (`label-full`/`label-short`) removes it from the accessibility tree. The Schedules tab needs `aria-label`. The League Settings button now shows its label at every width, so it needs no `aria-label`.
 7. **ID migration must keep fields.** An older `replacePlayer` rebuilt entries as `{playerId, onIr}`, dropping other fields. It now spreads the entry. Keep that, and keep remapping IDs in `manual`.
 8. **Priorities rely on Kuhn order** (§D.2). Keep `priorityOrder` stable and keep starts first in `optimizeDay`.
 9. **IR simplicity.** Don't reintroduce injury-eligibility checks, an injured flag or an IR eligibility setting. The data has no injury statuses (ESPN returns none).
@@ -318,7 +345,7 @@ Each rule below is enforced by the code or tests named; keep them true.
     - The Roster two-line layout depends on the class names `r-name`, `r-team`, `r-elig`, `r-games`, `r-status`, `r-remove` and on the row column count.
     - Adding a roster column means updating the ≤600px grid in `styles.css`.
     - Test at 360px; that's where overflow appeared.
-13. **Footer timing and layout.** The footer (`.data-status`, a flex row: data note left, About right via `margin-left: auto`, including in the touch rule) renders immediately, with only "About" until data loads. The smoke test reads its "NHL data" text only after the Team Schedules table has rendered; keep that ordering if you change either.
+13. **Footer timing and layout.** The footer (`.data-status`, a flex row: data note left; Contact and About right, the first link pushed right by `margin-left: auto` and the second reset by `.foot-link + .foot-link`, including in the touch rule) renders immediately, with only "About" until data loads. The smoke test reads its "NHL data" text only after the Team Schedules table has rendered; keep that ordering if you change either.
 14. **Contact return flow.**
     - `takeContactReturn()` runs once in `App`'s toast state initializer and strips `?contact=sent`, keeping the hash.
     - `_next` must stay an absolute URL built at runtime (`contactReturnUrl`).
@@ -330,7 +357,7 @@ Each rule below is enforced by the code or tests named; keep them true.
 | # | Topic | Confirmed | Current implementation | Uncertain / inconsistent | Ask before changing? |
 |---|---|---|---|---|---|
 | 1 | IR players in Lineup summaries | Summaries must match the rows and the final lineups. | IR players' scheduled games are excluded from the Skaters/Goalies/total cards, but still shown as 0/N in the grid's IR rows. | The owner was offered including them and didn't decide. | Yes |
-| 2 | Trade Lab and daily choices | The Trade Lab UI says both columns use optimal lineups. | Trade Lab applies priorities but ignores `state.manual`. | Never explicitly confirmed as intended. | Yes |
+| 2 | Trade Lab and daily choices | The Trade Lab UI says both columns use optimal daily lineups (note restored in round 2). | Trade Lab applies priorities but ignores `state.manual`. | Never explicitly confirmed as intended. | Yes |
 | 3 | GA Measurement ID | The tag `G-NYB64MVCVE` was requested and is installed. | `index.html` uses `G-NYB64MVCVE`. | The owner saw `G-T0YYP0GJSY` in a new GA setup screen. Two options were offered (keep the current ID, or swap to the new one); no choice was made. The owner said not to install a second tag or change the ID yet. | Yes |
 | 4 | Contact delivery | Reuse Letter Ladder's FormSubmit recipient and settings; the address is public. | Standard POST to `formsubmit.co/jmaser4@gmail.com`; simulated tests only. | Real delivery is unverified; FormSubmit may send a one-time activation email for the new site. | No (verify with a real message) |
 | 5 | ESPN-only / `inactive` players | Remove the UI badge and labels; keep the data flag. | About 808 ESPN-only players use ESPN's team; retired players (e.g. Toews) still count their old team's games. | Whether to filter or label stale players is undecided. | Yes |
@@ -341,3 +368,5 @@ Each rule below is enforced by the code or tests named; keep them true.
 | 10 | Priority granularity | ★ Preferred is binary. | Ties break by roster order. | No full ranking; the owner hasn't asked for one. | Yes, if requested |
 | 11 | Players with no positions | — | `LineupGrid` (`every` on an empty list) treats them as goalies; `isGoalieOnly` treats them as skaters. `validateRoster` reports `no-positions`. | Only reachable through an old saved custom player or a data record with no positions; the UI can't create one. | No (fix only if it matters) |
 | 12 | Lineup slot rows on phones | — | At 390px and 360px, each Daily Lineup Slots row is wider than the dialog: the G toggle is cut off and the remove (×) button sits off-screen, reachable only by scrolling the dialog sideways. Found on 2026-10-21; the overflow was already there before the Cancel/Save move. | Not fixed; outside that change. | No (fix when authorized) |
+| 14 | Testing site identity | — | The testing repo's `og:url` points to the live URL (as asked), so previews of the testing URL claim the live URL. | Matters only for the testing site. | Yes |
+| 15 | Custom periods aren't saved | The owner said not to add persistence. | Custom-mode periods and the Total last only for the visit. | Users may expect them to survive a reload. | Yes |

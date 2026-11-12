@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { CONTACT_ACTION, CONTACT_FIELDS, MESSAGE_MAX, contactReturnUrl } from '../contact.ts';
 
-/** Contact form shown inside the League Settings dialog. Submits as a normal form post to FormSubmit. */
+/** Contact form, opened from the footer. Submits as a normal form post to FormSubmit. */
 export function ContactForm({ onBack }: { onBack: () => void }) {
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);

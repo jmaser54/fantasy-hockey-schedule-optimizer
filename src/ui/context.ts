@@ -4,7 +4,7 @@ import type { DayResult, LineupPlayer, RangeResult } from '../domain/optimizer.t
 import type { ISODate, Player, Team } from '../domain/types.ts';
 import type { Action, AppState } from '../state/appState.ts';
 
-/** A date window the user can analyze: a round, the full playoffs or a custom range. */
+/** A date window the user can analyze: next week, a playoff round, the full playoffs or a custom period. */
 export interface Window {
   id: string;
   name: string;
@@ -19,7 +19,11 @@ export interface AppCtx {
   data: Dataset;
   resolve: (id: string) => Player | undefined;
   teams: Map<string, Team>;
-  windows: Window[]; // rounds…, all, custom
+  windows: Window[]; // the current period mode's windows: next week; rounds…, all; or custom periods (+ total)
+  /** Playoff rounds and "Full Playoffs", whatever the mode. */
+  playoffWindows: Window[];
+  /** Next Monday–Sunday, whatever the mode (the Roster tab's Games column). */
+  weekWindow: Window;
   selected: Window;
   lineupPlayers: LineupPlayer[];
   /** Results for every date in any window, with manual lineups applied. */

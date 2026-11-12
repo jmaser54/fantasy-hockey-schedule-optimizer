@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, dayCount, eachDate, easternDateFromUTC, formatRange, isValidISODate, weekday } from './dates.ts';
+import { addDays, dayCount, eachDate, easternDateFromUTC, formatRange, isValidISODate, nextWeek, weekday, easternToday } from './dates.ts';
 import { DEFAULT_LEAGUE, DEFAULT_PERIODS, validateLeague, validatePeriod } from './league.ts';
 import { isLightNight, rankTeams } from './rankings.ts';
 import { validateRoster } from './roster.ts';
@@ -8,6 +8,14 @@ import { sched } from './testUtils.ts';
 import type { Player, RosterEntry } from './types.ts';
 
 describe('dates', () => {
+  it('next week is the following Monday through Sunday', () => {
+    expect(nextWeek('2026-11-11')).toEqual({ start: '2026-11-16', end: '2026-11-22' }); // Wednesday
+    expect(nextWeek('2026-11-16')).toEqual({ start: '2026-11-23', end: '2026-11-29' }); // Monday: the week after
+    expect(nextWeek('2026-11-22')).toEqual({ start: '2026-11-23', end: '2026-11-29' }); // Sunday
+    expect(nextWeek('2026-12-30')).toEqual({ start: '2027-01-04', end: '2027-01-10' }); // across the year end
+    expect(easternToday(new Date('2026-11-16T03:30:00Z'))).toBe('2026-11-15'); // still Sunday evening in New York
+  });
+
   it('validates real calendar dates only', () => {
     expect(isValidISODate('2027-02-28')).toBe(true);
     expect(isValidISODate('2027-02-29')).toBe(false); // 2027 is not a leap year

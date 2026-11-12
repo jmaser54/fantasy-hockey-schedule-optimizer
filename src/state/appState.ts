@@ -12,7 +12,7 @@ export interface Scenario {
   adds: string[];
 }
 
-export type Selection = string; // a period id, 'all' or 'custom'
+export type Selection = string; // a playoff round id, 'all', or a custom period id (older saves: 'custom')
 
 export interface AppState {
   version: number;
@@ -36,7 +36,7 @@ export function initialState(): AppState {
     league: structuredClone(DEFAULT_LEAGUE),
     periods: structuredClone(DEFAULT_PERIODS),
     custom: { start: DEFAULT_PERIODS[0]!.start, end: DEFAULT_PERIODS[DEFAULT_PERIODS.length - 1]!.end },
-    selection: 'all',
+    selection: DEFAULT_PERIODS[0]!.id,
     roster: [],
     customPlayers: [],
     manual: {},

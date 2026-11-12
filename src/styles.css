@@ -44,13 +44,18 @@ button { cursor: pointer; }
 .small { font-size: 12px; }
 
 /* Shell */
-.topbar {
-  position: sticky; top: 0; z-index: 20;
-  background: var(--surface); border-bottom: 1px solid var(--border);
-}
+.topbar { background: var(--surface); }
+/* Only the tab bar (tabs + League Settings) stays pinned; the title and tagline scroll away. */
+.tabbar { position: sticky; top: 0; z-index: 20; background: var(--surface); border-bottom: 1px solid var(--border); }
+.tabbar .topbar-inner { padding-top: 0; }
+.tabbar .tabs { margin-top: 0; }
+.tabbar-row { display: flex; align-items: center; gap: 12px; }
+.tabbar-row .tabs { flex: 1 1 auto; min-width: 0; }
+.tabbar-row .settings-btn { order: 2; padding: 5px 12px; font-size: 13px; }
 .topbar-inner { max-width: 1200px; margin: 0 auto; padding: 10px 16px 0; }
 .brand-row { display: flex; align-items: center; gap: 12px; }
 .brand { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; margin-right: auto; }
+.tagline { margin: 0; padding: 1px 0 6px; font-size: 12px; color: var(--muted); }
 .brand span { color: var(--accent); }
 .tabs { display: flex; gap: 2px; margin-top: 8px; overflow-x: auto; }
 .tab {
@@ -68,12 +73,13 @@ main { max-width: 1200px; margin: 0 auto; padding: 16px; }
 }
 .settings-btn span { font-size: 16px; line-height: 1; }
 .settings-btn:hover { border-color: var(--accent); background: var(--accent-soft); }
-.settings-btn .label-full { font-size: inherit; line-height: inherit; }
 .label-short { display: none; }
 .data-status { max-width: 1200px; margin: 0 auto; padding: 4px 16px 20px; font-size: 11px; color: var(--muted); opacity: 0.8; display: flex; align-items: baseline; gap: 16px; }
 .data-status.stale { color: var(--warn); opacity: 1; }
 .foot-link { color: var(--muted); text-decoration: none; margin-left: auto; white-space: nowrap; }
 .foot-link:hover { color: var(--accent); text-decoration: underline; }
+.foot-btn { border: 0; background: none; padding: 0; font: inherit; cursor: pointer; }
+.foot-link + .foot-link { margin-left: 0; }
 .about { max-width: 720px; }
 .about p { line-height: 1.6; }
 
@@ -90,7 +96,20 @@ main { max-width: 1200px; margin: 0 auto; padding: 16px; }
 .icon-btn:hover { background: var(--surface-2); color: var(--text); }
 
 /* Period bar */
-.periodbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 16px; }
+.periodbar { display: grid; justify-items: start; gap: 10px; margin-bottom: 16px; }
+.setup-line { display: block; margin: -8px 0 14px; padding: 0; border: 0; background: none; font: inherit; font-size: 12px; color: var(--muted); text-align: left; cursor: pointer; }
+.setup-line:hover { color: var(--accent); text-decoration: underline; }
+.roster-pill {
+  justify-self: start; display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px; border-radius: 999px;
+  border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.roster-pill.has { cursor: default; border-color: var(--border); background: var(--surface); color: var(--text); font-weight: 500; }
+.period-modes, .period-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.mode-toggle button { padding: 6px 16px; font-size: 14px; }
+.custom-periods { display: grid; gap: 6px; }
+.custom-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.custom-row > input { width: 160px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+.custom-periods .row-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .segmented { display: inline-flex; background: var(--surface-2); border-radius: 9px; padding: 3px; gap: 2px; flex-wrap: wrap; }
 .segmented button {
   border: 0; background: none; padding: 5px 12px; border-radius: 7px; font-weight: 600; color: var(--muted);
@@ -146,7 +165,6 @@ th.col-selected { box-shadow: inset 0 -2px 0 var(--accent); }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
 
 /* Team schedules: view toggle, bar matchups, your-players button, schedule grid */
-.view-toggle { justify-self: start; }
 .strip button.bar-col { border: 0; background: none; padding: 0; cursor: pointer; border-radius: 3px; }
 .strip button.bar-col:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .strip .bar-col.active .bar { outline: 2px solid var(--text); outline-offset: 1px; }
@@ -168,6 +186,10 @@ th.col-selected { box-shadow: inset 0 -2px 0 var(--accent); }
 .sgrid td.n, .sgrid th.n { padding: 4px 10px; text-align: right; font-size: 12px; }
 /* The grid isn't interactive: no row hover highlight (game-day shading stays). */
 .sgrid tbody tr:hover td:not(.game) { background: none; }
+/* Teams with players on your roster. Game cells keep their grey so game days stay distinct. */
+.sgrid tr.mine-row th.sticky { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.sgrid tr.mine-row td.off { background: var(--accent-soft); }
+.sgrid tbody tr.mine-row:hover td.off { background: var(--accent-soft); }
 /* League-wide NHL games per date, above the date headers. */
 .sgrid .nightly th { padding: 4px 2px 0; font-size: 10px; font-weight: 400; color: var(--muted); border-bottom: 0; font-variant-numeric: tabular-nums; }
 .sgrid .nightly th.sticky { padding: 4px 10px 0; font-size: 10px; font-weight: 400; color: var(--muted); }
@@ -316,9 +338,6 @@ textarea { min-height: 140px; resize: vertical; font-family: inherit; }
 @media (max-width: 560px) { .period-row { grid-template-columns: 1fr 1fr; } }
 .slot-row input, .period-row input { width: 100%; padding: 5px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
 h3 { font-size: 13px; margin: 16px 0 6px; }
-.settings-foot { margin-top: 20px; padding-top: 10px; border-top: 1px solid var(--border); text-align: center; font-size: 12px; }
-.settings-foot .link-btn { color: var(--muted); }
-.settings-foot .link-btn:hover { color: var(--accent); }
 .contact-form textarea { min-height: 160px; }
 .toast {
   position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 60;
@@ -337,8 +356,14 @@ h3 { font-size: 13px; margin: 16px 0 6px; }
 /* Phones: header and navigation fit, roster rows in two lines. */
 @media (max-width: 600px) {
   .topbar-inner { padding: 8px 12px 0; }
-  .settings-btn { padding: 0; width: 40px; height: 40px; justify-content: center; }
-  .settings-btn .label-full { display: none; }
+  .tabbar-row { flex-wrap: wrap; gap: 0; }
+  .tabbar-row .tabs { flex-basis: 100%; }
+  .tabbar-row .settings-btn { order: 0; margin: 6px 0 2px; }
+  .custom-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .custom-row > input { width: 100%; }
+  .custom-row .date-inputs { grid-column: 1 / -1; order: 2; display: flex; }
+  .custom-row .date-inputs input { flex: 1 1 0; min-width: 0; }
+  .custom-row .badge { grid-column: 1 / -1; order: 3; justify-self: start; }
   .tabs { margin-top: 4px; gap: 0; }
   .tab { flex: 1 1 0; padding: 10px 4px; font-size: 13px; text-align: center; }
   .tab .label-full { display: none; }
@@ -354,7 +379,7 @@ h3 { font-size: 13px; margin: 16px 0 6px; }
   .roster-table .r-name { grid-area: name; white-space: normal; font-weight: 600; }
   .roster-table .r-team { grid-area: team; justify-self: end; color: var(--muted); }
   .roster-table .r-games { grid-area: games; justify-self: end; }
-  .roster-table .r-games::after { content: ' games'; color: var(--muted); font-weight: 400; }
+  .roster-table .r-games::after { content: ' games next week'; color: var(--muted); font-weight: 400; }
   .roster-table .r-elig { grid-area: elig; white-space: normal; }
   .roster-table .r-status { grid-area: status; justify-self: end; }
   .roster-table .r-remove { grid-area: remove; }
@@ -374,6 +399,7 @@ h3 { font-size: 13px; margin: 16px 0 6px; }
   .check-row { min-height: 44px; }
   .link-btn { padding: 10px 0; margin: -10px 0; }
   .foot-link { display: inline-block; padding: 10px 6px; margin: -10px -6px -10px auto; }
+  .foot-link + .foot-link { margin-left: -6px; }
   .slot-row { grid-template-columns: 90px 64px 1fr 40px; }
   .period-row { grid-template-columns: 1fr 140px 140px 40px; }
 }

@@ -30,6 +30,18 @@ export function addDays(date: ISODate, days: number): ISODate {
   return fromUTC(toUTC(date) + days * 86_400_000);
 }
 
+/** Today's date in US Eastern time, the NHL schedule's date convention. */
+export function easternToday(now = new Date()): ISODate {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+}
+
+/** The upcoming Monday–Sunday week: the first Monday after `today` through the following Sunday. */
+export function nextWeek(today: ISODate): { start: ISODate; end: ISODate } {
+  const dow = new Date(toUTC(today)).getUTCDay(); // 0 = Sunday
+  const start = addDays(today, (8 - dow) % 7 || 7);
+  return { start, end: addDays(start, 6) };
+}
+
 /** Inclusive list of dates from start to end. Empty if end < start. */
 export function eachDate(start: ISODate, end: ISODate): ISODate[] {
   const out: ISODate[] = [];
