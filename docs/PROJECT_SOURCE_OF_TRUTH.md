@@ -11,7 +11,7 @@ Labels used below:
 
 Last reviewed against commit `c9af699` (2026-10-19); sections touched by the 2026-11-12 changes reviewed against the code.
 
-**Testing repo:** `jmaser54/fantasy-hockey-schedule-optimizer-testing` (default branch `main`, site https://jmaser54.github.io/fantasy-hockey-schedule-optimizer-testing/) is where the owner tries changes before they come here. Rounds 1–3 (its commits `5c2d2dc`, `952152a`, `004f18f`) rounds 4–8 (`847d860`, `80ef25a`, `9a0a2e4`, `67ba9b7`, `f6bfde0`) were brought to live on 2026-11-12, and the star-priority work (`ebe66e4`, `42f6e30`, `d2ca6cb`) on 2026-11-13. The testing repo has its own `CLAUDE.md` and copy of this document, and no GA tag.
+**Testing repo:** `jmaser54/fantasy-hockey-schedule-optimizer-testing` (default branch `main`, site https://jmaser54.github.io/fantasy-hockey-schedule-optimizer-testing/) is where the owner tries changes before they come here. Rounds 1–3 (its commits `5c2d2dc`, `952152a`, `004f18f`) rounds 4–8 (`847d860`, `80ef25a`, `9a0a2e4`, `67ba9b7`, `f6bfde0`) were brought to live on 2026-11-12, the star-priority work (`ebe66e4`, `42f6e30`, `d2ca6cb`) on 2026-11-13, and the reset tests, tab sync, testing-storage isolation and reset wording (`f93f1fc`, `58666ef`, `c7026b8`, `7d98f11`) on 2026-11-13. The testing repo has its own `CLAUDE.md` and copy of this document, and no GA tag.
 
 ---
 
@@ -110,7 +110,7 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`). The site opens on T
   - Phones (`pointer: coarse`): position buttons are 52×44px.
   - The automatic optimal lineup stays the default for every day. A move on one date never changes other dates, the roster, league settings or rounds.
   - Changing a priority updates automatically optimized dates and leaves manually edited dates exactly as saved.
-  - Reset Day, or Reset <period>, removes choices and returns to the priority-aware optimum.
+  - Reset Day, or Reset <period>, removes choices and returns to the priority-aware optimum. Reset <period> asks for confirmation with exactly "Revert lineup changes?" (round 13, owner's wording; no day count).
   - Choices that become invalid (IR, no room, roster change) are ignored *visibly*, never forced into an invalid lineup.
   - Manually adjusted days are marked: a "Your Changes" badge, a blue dash under the date in the grid, and an "edited" tag on summary cards. The legend has no entry for the dash (removed in round 7, owner decision).
 - **Day editor:**
@@ -158,6 +158,8 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`). The site opens on T
 
 ### Persistence (Confirmed)
 - Priorities and per-date choices survive reloads via the app's `localStorage` persistence. Overrides are keyed by date, so they only affect windows containing that date.
+- **Open tabs stay in sync (round 11):** when saved data changes in another tab, each open page reloads it at once (`storage` event in `App.tsx`, reducer action `load`) and doesn't write it back. Before, another open tab kept showing, and could later re-save, an old lineup. That's what made Reset Next Week to Optimal look broken until a refresh.
+- **Separate storage per site (round 12, owner decision):** the live and testing sites share one domain (`jmaser54.github.io`) and so one browser storage. `storageKeyFor(BASE_URL)` in `appState.ts` gives the testing build (base `/fantasy-hockey-schedule-optimizer-testing/`) the key `playoff-optimizer-testing:v1`; the live site and local runs keep `playoff-optimizer:v1`. Nothing is migrated or copied: the testing site starts empty. Tab sync only reacts to its own key, so it never crosses between the sites.
 
 ### About page (Confirmed)
 - A small "About" link sits at the far right of the footer, with the data note ("NHL data updated <date>") on the left and "Contact" just before About. Neither may appear in the main navigation or prominently on the main page.
@@ -316,6 +318,8 @@ Each rule below is enforced by the code or tests named; keep them true.
     - the data status chip and paste mode as the Roster default;
     - the Lineup heading matches `/of \d+ scheduled games fit your lineup/`;
     - the roster persists across a reload;
+    - Reset <period> to Optimal updates the visible lineup and saved data at once, and a change or reset in one tab shows in another open tab without a reload (skipped if McDavid has no game that week);
+    - storage isolation: the other site's key is seeded with a different roster, which this site must never read, sync from or change;
     - GA hits are intercepted, not sent;
     - no browser errors.
 - `refresh-data.yml`: daily at 10:17 UTC, and on pushes that touch the pipeline. It tests, refreshes, commits `public/data` as `github-actions[bot]` if changed, then calls the deploy.
@@ -370,6 +374,7 @@ Each rule below is enforced by the code or tests named; keep them true.
     - `_next` must stay an absolute URL built at runtime (`contactReturnUrl`).
 15. **Smoke-test runner pin.** On 2026-10-27, `ubuntu-latest` moved to Ubuntu 26.04, and Playwright 1.56.1 refused to install Chromium there ("does not support chromium on ubuntu26.04-x64"). That failed the deploy smoke test, which the daily refresh also runs. The `smoke-test` job in `deploy-pages.yml` is pinned to `ubuntu-24.04`; the other jobs don't use Playwright and stay on `ubuntu-latest`. Unpin it only together with a Playwright upgrade that supports the newer image.
 16. **Smoke-test waits.** Don't wait for `networkidle` after the app has loaded: gtag can keep a request open, and the persistence `reload` timed out on 2026-10-30. Wait for `domcontentloaded` or `load`, then for a specific element. No smoke-test navigation uses `networkidle`. The first `goto` waits for the rankings rows and the "NHL data" status; the persistence reload waits for the Lineup heading.
+17. **Several open tabs.** Every open page keeps its own copy of the state. Without the `storage` sync, a reset (or any change) in one tab left other tabs stale, and a later change there re-saved the old data. Reproduce by opening two tabs; the smoke test covers it.
 
 ## H. Open questions and discrepancies
 

@@ -7,7 +7,7 @@ import { expandSeats, freezeOverride, optimizeDates, summarize, type DayResult, 
 import { activeSlotCount } from '../domain/league.ts';
 import { toLineupPlayers } from '../domain/roster.ts';
 import type { ISODate, Player } from '../domain/types.ts';
-import { loadFromStorage, reducer, saveToStorage } from '../state/appState.ts';
+import { STORAGE_KEY, deserialize, loadFromStorage, reducer, saveToStorage } from '../state/appState.ts';
 import { Ctx, useApp, type AppCtx, type Window } from './context.ts';
 import { AboutView } from './About.tsx';
 import { ContactForm } from './Contact.tsx';
@@ -49,9 +49,27 @@ export function App() {
       .catch((err: Error) => setStatus({ state: 'error', message: err.message }));
   }, []);
 
+  // State loaded from another tab is already saved; don't write it back.
+  const fromOtherTab = useRef(false);
   useEffect(() => {
+    if (fromOtherTab.current) {
+      fromOtherTab.current = false;
+      return;
+    }
     setSaveFailed(!saveToStorage(state));
   }, [state]);
+
+  // Another tab (or the other Playoff Planner site on this domain) saved changes: show them here
+  // at once, so this page never displays, or later re-saves, a stale lineup.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== STORAGE_KEY && e.key !== null) return;
+      fromOtherTab.current = true;
+      dispatch({ type: 'load', state: deserialize(e.key === null ? null : e.newValue).state });
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   // GA4: the Google tag counts the initial load; count each later tab change once.
   const trackedTab = useRef(tab);

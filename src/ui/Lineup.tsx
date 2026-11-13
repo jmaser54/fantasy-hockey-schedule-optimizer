@@ -72,7 +72,7 @@ export function LineupView({ onGoRoster }: { onGoRoster: () => void }) {
               <button
                 className="btn small"
                 onClick={() => {
-                  if (confirm(`Remove your lineup changes on ${manualDates.length} day${manualDates.length === 1 ? '' : 's'} in ${selected.name}?`)) dispatch({ type: 'clearManual', dates: manualDates });
+                  if (confirm('Revert lineup changes?')) dispatch({ type: 'clearManual', dates: manualDates });
                 }}
               >
                 Reset {selected.name} to Optimal
