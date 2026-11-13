@@ -68,6 +68,7 @@ function mapPlayerInManual(manual: AppState['manual'], from: string, to: string 
     const next: DayOverride = { start: fix(o.start), sit: fix(o.sit) };
     // An exact lineup keeps its seats; a removed player leaves their seat empty.
     if (o.lineup) next.lineup = Object.fromEntries(Object.entries(o.lineup).map(([seat, id]) => [seat, id === from ? to : id]));
+    if (o.notes) next.notes = o.notes;
     if (!isEmptyOverride(next)) out[date] = next;
   }
   return out;
@@ -223,6 +224,7 @@ function loadManual(v: unknown): AppState['manual'] {
     if (!isValidISODate(date) || !isObj(o)) continue;
     const next: DayOverride = Array.isArray(o.start) || Array.isArray(o.sit) ? { start: ids(o.start), sit: ids(o.sit) } : { start: ids(Object.values(o)), sit: [] };
     if (isObj(o.lineup)) next.lineup = Object.fromEntries(Object.entries(o.lineup).map(([seat, id]) => [seat, typeof id === 'string' ? id : null]));
+    if (Array.isArray(o.notes)) next.notes = o.notes.filter((x): x is string => typeof x === 'string');
     if (!isEmptyOverride(next)) out[date] = next;
   }
   return out;

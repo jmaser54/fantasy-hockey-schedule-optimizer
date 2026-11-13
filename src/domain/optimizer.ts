@@ -83,6 +83,8 @@ export interface DayOverride {
    * When present it is used as is (start/sit are ignored) and nothing refills.
    */
   lineup?: Record<string, string | null>;
+  /** "No longer applies" notes carried over when an older start/sit day was saved as an exact lineup. */
+  notes?: string[];
 }
 
 export const isEmptyOverride = (o: DayOverride | undefined) => !o || (!o.lineup && o.start.length === 0 && o.sit.length === 0);
@@ -237,6 +239,7 @@ export function optimizeDay(
   const sat = new Set<string>();
   let seatPlayer: (string | undefined)[] = new Array(seats.length).fill(undefined);
   const lineup = override?.lineup;
+  manualIssues.push(...(override?.notes ?? []));
 
   if (lineup) {
     // Exact lineup: honored seat by seat, never re-optimized or refilled.
@@ -357,6 +360,20 @@ export interface RangeResult {
   optimalUsable: number;
   manualDays: number;
   players: PlayerTotals[];
+}
+
+/**
+ * Turn a start/sit day (saved by the old Start/Sit buttons) into the exact lineup it
+ * produces now. Manually edited days then stay as they are when stars change later:
+ * older start/sit days only pinned the chosen players and re-sorted the rest by stars.
+ */
+export function freezeOverride(date: ISODate, roster: readonly LineupPlayer[], seats: readonly Seat[], schedule: ScheduleIndex, override: DayOverride): DayOverride {
+  if (override.lineup) return override;
+  const day = optimizeDay(date, roster, seats, schedule, override);
+  const lineup = Object.fromEntries(day.seats.map((x) => [x.seat.key, x.playerId ?? null]));
+  const frozen: DayOverride = { start: Object.values(lineup).filter((x): x is string => !!x), sit: override.sit, lineup };
+  if (day.manualIssues.length) frozen.notes = day.manualIssues; // keep the day's "no longer applies" warnings
+  return frozen;
 }
 
 export function optimizeRange(

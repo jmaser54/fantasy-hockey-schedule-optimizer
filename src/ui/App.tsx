@@ -3,7 +3,7 @@ import { trackTabView } from '../analytics.ts';
 import { takeContactReturn } from '../contact.ts';
 import { buildPlayerLookup, isStale, loadDataset, type DataStatus } from '../data/load.ts';
 import { dayCount, eachDate, formatRange, formatShort, isValidISODate, easternToday, nextWeek } from '../domain/dates.ts';
-import { optimizeDates, summarize, type DayResult, type LineupPlayer } from '../domain/optimizer.ts';
+import { expandSeats, freezeOverride, optimizeDates, summarize, type DayResult, type LineupPlayer } from '../domain/optimizer.ts';
 import { activeSlotCount } from '../domain/league.ts';
 import { toLineupPlayers } from '../domain/roster.ts';
 import type { ISODate, Player } from '../domain/types.ts';
@@ -295,6 +295,15 @@ function Ready(props: {
     return m;
   }, [state.roster, lookup]);
   const lineupPlayers = useMemo(() => toLineupPlayers(state.roster, playersMap), [state.roster, playersMap]);
+
+  // Days edited with the old Start/Sit buttons are saved as exact lineups (once), so later
+  // star changes leave every manually edited day as it is. What the user sees is unchanged.
+  useEffect(() => {
+    const older = Object.entries(state.manual).filter(([, o]) => !o.lineup);
+    if (older.length === 0) return;
+    const seats = expandSeats(state.league.slots);
+    for (const [date, o] of older) dispatch({ type: 'setManual', date, override: freezeOverride(date, lineupPlayers, seats, data.schedule, o) });
+  }, [state.manual, state.league.slots, lineupPlayers, data.schedule, dispatch]);
 
   const allDates = useMemo(() => [...new Set(windows.flatMap((w) => w.dates))].sort(), [windows]);
   const days = useMemo(

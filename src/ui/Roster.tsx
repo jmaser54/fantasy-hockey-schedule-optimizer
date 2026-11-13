@@ -351,7 +351,7 @@ function RosterTable() {
         </table>
       </div>
       <div className="panel-body small muted" style={{ borderTop: '1px solid var(--border)' }}>
-        <PosBadges positions={['C', 'LW', 'RW', 'D', 'G']} /> toggles change eligibility for your league. ★ marks preferred players, who get lineup spots first when more players have games than there are spots. IR players don’t count toward the roster limit and never play.
+        <PosBadges positions={['C', 'LW', 'RW', 'D', 'G']} /> toggles change eligibility for your league. ★ Starred players get priority in automatically optimized lineups. Manual lineup changes take precedence. IR players don’t count toward the roster limit and never play.
       </div>
       <div className="clear-roster">
         <button

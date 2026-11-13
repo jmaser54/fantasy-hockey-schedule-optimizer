@@ -11,7 +11,7 @@ Labels used below:
 
 Last reviewed against commit `c9af699` (2026-10-19); sections touched by the 2026-11-12 changes reviewed against the code.
 
-**Testing repo:** `jmaser54/fantasy-hockey-schedule-optimizer-testing` (default branch `main`, site https://jmaser54.github.io/fantasy-hockey-schedule-optimizer-testing/) is where the owner tries changes before they come here. Rounds 1–3 (its commits `5c2d2dc`, `952152a`, `004f18f`) and rounds 4–8 (`847d860`, `80ef25a`, `9a0a2e4`, `67ba9b7`, `f6bfde0`) were brought to live on 2026-11-12. The testing repo has its own `CLAUDE.md` and copy of this document, and no GA tag.
+**Testing repo:** `jmaser54/fantasy-hockey-schedule-optimizer-testing` (default branch `main`, site https://jmaser54.github.io/fantasy-hockey-schedule-optimizer-testing/) is where the owner tries changes before they come here. Rounds 1–3 (its commits `5c2d2dc`, `952152a`, `004f18f`) rounds 4–8 (`847d860`, `80ef25a`, `9a0a2e4`, `67ba9b7`, `f6bfde0`) were brought to live on 2026-11-12, and the star-priority work (`ebe66e4`, `42f6e30`, `d2ca6cb`) on 2026-11-13. The testing repo has its own `CLAUDE.md` and copy of this document, and no GA tag.
 
 ---
 
@@ -93,7 +93,10 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`). The site opens on T
 ### Optimization (Confirmed)
 - Objective: the most player-games in the lineup per day, summed over the window. Days are independent, and lineup moves are free.
 - **Player priorities:** a single ★ Preferred flag per roster player. Default is not preferred.
-  - Preferred players win contested spots across the whole selected period.
+  - Preferred players win contested spots across the whole selected period on automatic days. Guarded by the "star priority (regression suite)" tests in `optimizer.test.ts` (including a random-roster check against the rule) and by `stars.test.ts`.
+  - **Stars vs manual days (owner decision, round 9):** starring or unstarring a player immediately recalculates automatic days and never changes a manually edited day. Explicit manual changes take precedence over stars. Reset Day to Optimal discards that day's manual lineup and recalculates with the current stars; it never changes stars. Stars change only when the user stars or unstars a player.
+  - Roster tab hint (exact copy): "★ Starred players get priority in automatically optimized lineups. Manual lineup changes take precedence."
+  - Day editor, only on manually edited days (exact copy): "This day keeps your saved lineup; starring or unstarring players won’t change it. Choose Reset Day to Optimal to follow current stars."
   - Priorities must never break position eligibility, overfill slots, or leave a fillable spot empty.
 - **Daily manual overrides (round 6, owner decision; modeled on ESPN Fantasy's mobile lineup editor, replacing round 5's destination panel):**
   - Every row has a position button beside the player: the slot label for starters (C, LW, RW, D, UTIL, F, G…) and "BN" for bench players. Empty slots show their button with "Empty".
@@ -106,7 +109,7 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`). The site opens on T
   - If a move returns the day to its automatic lineup (same player in every seat), the override is cleared and the dash goes away.
   - Phones (`pointer: coarse`): position buttons are 52×44px.
   - The automatic optimal lineup stays the default for every day. A move on one date never changes other dates, the roster, league settings or rounds.
-  - Changing a priority updates automatically optimized dates but keeps manual choices.
+  - Changing a priority updates automatically optimized dates and leaves manually edited dates exactly as saved.
   - Reset Day, or Reset <period>, removes choices and returns to the priority-aware optimum.
   - Choices that become invalid (IR, no room, roster change) are ignored *visibly*, never forced into an invalid lineup.
   - Manually adjusted days are marked: a "Your Changes" badge, a blue dash under the date in the grid, and an "edited" tag on summary cards. The legend has no entry for the dash (removed in round 7, owner decision).
@@ -226,6 +229,7 @@ Each rule below is enforced by the code or tests named; keep them true.
    - A player fills at most one seat, and only a seat whose `accepts` includes one of their effective positions.
    - Seats come from `expandSeats(league.slots)`; no seat holds two players; IR players never get seats.
 4. **Daily choices** (`DayOverride {start[], sit[], lineup?}`, keyed by date in `state.manual`):
+   - **Older start/sit days are frozen on load:** `Ready` (`App.tsx`) converts every saved day without `lineup` into the exact lineup it currently produces (`freezeOverride`), once. The user sees the same lineup, and later star changes can't re-sort it. Its "no longer applies" warnings are kept in `DayOverride.notes` and still shown (day editor notice and the week view's flag); later moves on that day keep them, and Reset Day to Optimal clears them with the day. (Start/sit days only pinned the chosen players and re-sorted the rest by stars, so they used to change when a star changed.)
    - **Exact lineup** (`lineup`, written by the day editor): used seat by seat with no re-optimizing or refilling. Entries for players who left the roster, went on IR or can't play that seat (`canPlaySeat`) are dropped and reported in `manualIssues`. If the league's seats no longer match (slots changed), the whole lineup is ignored with an issue and the day is automatic. `removePlayer`/`replacePlayer` empty or rename the seat. `isEmptyOverride` treats any `lineup` as a change. The loader keeps `lineup`; older saves without it work as before.
    - Without `lineup` (older saves), the start/sit rules below apply:
    - Starts are placed first, then everyone else not sat, by priority.

@@ -331,7 +331,8 @@ function DayDetail({ day, onNav, dates, sectionRef }: { day: DayResult; onNav: (
     const auto = optimizeDay(day.date, lineupPlayers, seats, data.schedule);
     const isAuto = auto.seats.every((x) => (x.playerId ?? null) === next[x.seat.key]);
     const start = Object.values(next).filter((x): x is string => !!x);
-    dispatch({ type: 'setManual', date: day.date, override: isAuto ? null : { start, sit: [], lineup: next } });
+    const notes = state.manual[day.date]?.notes; // keep carried-over "no longer applies" warnings
+    dispatch({ type: 'setManual', date: day.date, override: isAuto ? null : { start, sit: [], lineup: next, ...(notes ? { notes } : {}) } });
     setPicked(null);
     toast('Lineup saved.');
   };
@@ -412,6 +413,9 @@ function DayDetail({ day, onNav, dates, sectionRef }: { day: DayResult; onNav: (
           <div className="notice" style={{ marginBottom: 12 }}>
             Some of your changes for this day no longer apply and are being ignored: {day.manualIssues.join(' ')}
           </div>
+        )}
+        {day.manual && (
+          <p className="section-hint">This day keeps your saved lineup; starring or unstarring players won’t change it. Choose Reset Day to Optimal to follow current stars.</p>
         )}
         <p className="section-hint swap-hint" aria-live="polite">
           {pickedPlayer ? (

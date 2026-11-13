@@ -478,3 +478,97 @@ describe('automatic lineup with an F slot shown first', () => {
     expect(Object.fromEntries(day.seats.map((x) => [x.seat.label, x.playerId ?? null]))).toEqual({ F: null, C: 'c', LW: 'lw', G: null });
   });
 });
+
+describe('star priority (regression suite)', () => {
+  const D = (n: number) => slots({ D: [n, ['D']], UTIL: ['C', 'LW', 'RW', 'D'], G: ['G'] });
+  const seatedIds = (d: ReturnType<typeof optimizeDay>) => new Set(d.seats.flatMap((x) => (x.playerId ? [x.playerId] : [])));
+  const starred = (p: LineupPlayer) => ({ ...p, preferred: true });
+  const s = sched([
+    ['2027-03-01', 'AAA', 'BBB'],
+    ['2027-03-01', 'CCC', 'DDD'],
+    ['2027-03-02', 'AAA', 'CCC'],
+  ]);
+
+  it('a single starred defenseman, last on the roster, beats unstarred defensemen', () => {
+    const roster = [player('d1', 'AAA', ['D']), player('d2', 'BBB', ['D']), player('d3', 'CCC', ['D']), player('d4', 'DDD', ['D']), starred(player('star', 'AAA', ['D']))];
+    const day = optimizeDay('2027-03-01', roster, expandSeats(D(2)), s); // 3 D-eligible seats, 5 D
+    expect(seatedIds(day).has('star')).toBe(true);
+    expect(day.usable).toBe(3);
+  });
+
+  it('a single starred forward beats unstarred forwards, with F and UTIL slots', () => {
+    const seats = expandSeats([...slots({ C: ['C'], UTIL: ['C', 'LW', 'RW', 'D'] }), { id: 'F', label: 'F', count: 1, accepts: ['C', 'LW', 'RW'] }]);
+    const roster = [player('c1', 'AAA', ['C']), player('c2', 'BBB', ['C']), player('lw', 'CCC', ['LW']), player('rw', 'DDD', ['RW']), starred(player('star', 'BBB', ['RW']))];
+    const day = optimizeDay('2027-03-01', roster, seats, s);
+    expect(seatedIds(day).has('star')).toBe(true);
+    expect(day.usable).toBe(3);
+  });
+
+  it('limited spots: all starred players start, and roster order breaks ties among equals', () => {
+    const roster = [player('u1', 'AAA', ['D']), starred(player('s1', 'BBB', ['D'])), starred(player('s2', 'CCC', ['D'])), starred(player('s3', 'DDD', ['D']))];
+    const seats = expandSeats(slots({ D: [2, ['D']] }));
+    expect([...seatedIds(optimizeDay('2027-03-01', roster, seats, s))].sort()).toEqual(['s1', 's2']); // 3 starred for 2 seats: roster order
+    const two = [player('u1', 'AAA', ['D']), player('u2', 'BBB', ['D']), starred(player('s1', 'CCC', ['D'])), starred(player('s2', 'DDD', ['D']))];
+    expect([...seatedIds(optimizeDay('2027-03-01', two, seats, s))].sort()).toEqual(['s1', 's2']);
+  });
+
+  it('never trades away a start for priority: the maximum number of starts is kept', () => {
+    // Starring the C/LW player must not cost the lineup a start: the LW-only player still fits.
+    const seats = expandSeats(slots({ C: ['C'], LW: ['LW'] }));
+    const roster = [player('lwOnly', 'AAA', ['LW']), player('cOnly', 'BBB', ['C']), starred(player('flex', 'CCC', ['C', 'LW']))];
+    const day = optimizeDay('2027-03-01', roster, seats, s);
+    expect(day.usable).toBe(2);
+    expect(day.usable).toBe(day.optimalUsable);
+    expect(seatedIds(day).has('flex')).toBe(true);
+  });
+
+  it('players take their own slot before F or UTIL', () => {
+    const seats = expandSeats([...slots({ LW: ['LW'], UTIL: ['C', 'LW', 'RW', 'D'] }), { id: 'F', label: 'F', count: 1, accepts: ['C', 'LW', 'RW'] }]);
+    const day = optimizeDay('2027-03-01', [starred(player('lw', 'AAA', ['LW']))], seats, s);
+    expect(day.seats.find((x) => x.playerId === 'lw')!.seat.label).toBe('LW');
+  });
+
+  it('a starred goalie never takes a skater slot, and a starred skater never takes a goalie slot', () => {
+    const roster = [starred(player('g', 'AAA', ['G'])), starred(player('d', 'BBB', ['D']))];
+    const day = optimizeDay('2027-03-01', roster, expandSeats(slots({ UTIL: ['C', 'LW', 'RW', 'D'], G: ['G'] })), s);
+    expect(Object.fromEntries(day.seats.map((x) => [x.seat.label, x.playerId]))).toEqual({ UTIL: 'd', G: 'g' });
+  });
+
+  it('manual choices override stars; untouched days and Reset (no override) follow stars again', () => {
+    const roster = [player('d1', 'AAA', ['D']), player('d2', 'CCC', ['D']), starred(player('star', 'BBB', ['D']))];
+    const seats = expandSeats(slots({ D: [2, ['D']] }));
+    const auto = optimizeDay('2027-03-01', roster, seats, s);
+    expect(seatedIds(auto).has('star')).toBe(true);
+    const sat: DayOverride = { start: [], sit: ['star'] };
+    expect(seatedIds(optimizeDay('2027-03-01', roster, seats, s, sat)).has('star')).toBe(false);
+    const exact: DayOverride = { start: ['d1', 'd2'], sit: [], lineup: { 'D#0': 'd1', 'D#1': 'd2' } };
+    expect(seatedIds(optimizeDay('2027-03-01', roster, seats, s, exact)).has('star')).toBe(false);
+    // Other days are computed without that day's choice; removing the choice (Reset Day) restores the star.
+    const days = optimizeDates(['2027-03-01', '2027-03-02'], roster, { slots: slots({ D: [2, ['D']] }) }, s, { '2027-03-01': exact });
+    expect(seatedIds(days.get('2027-03-01')!).has('star')).toBe(false);
+    expect(seatedIds(optimizeDay('2027-03-01', roster, seats, s, undefined))).toEqual(seatedIds(auto));
+  });
+
+  it('matches the intended rule on random rosters: stars first, roster order, as many starts as possible', () => {
+    let seed = 12345;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+    const positions: Position[][] = [['C'], ['LW'], ['RW'], ['D'], ['G'], ['C', 'LW'], ['LW', 'RW'], ['C', 'RW'], ['D', 'RW']];
+    const layouts = [
+      slots({ C: [2, ['C']], LW: [2, ['LW']], RW: [2, ['RW']], D: [4, ['D']], UTIL: ['C', 'LW', 'RW', 'D'], G: [2, ['G']] }),
+      [...slots({ C: [2, ['C']], LW: [2, ['LW']], RW: [2, ['RW']], D: [4, ['D']], G: [2, ['G']] }), { id: 'F', label: 'F', count: 2, accepts: ['C', 'LW', 'RW'] as Position[] }],
+      slots({ C: ['C'], D: [3, ['D']], UTIL: [2, ['C', 'LW', 'RW', 'D']], G: ['G'] }),
+    ];
+    const teams = ['AAA', 'BBB', 'CCC', 'DDD'];
+    for (const layout of layouts) {
+      const seats = expandSeats(layout);
+      for (let t = 0; t < 300; t++) {
+        const roster = Array.from({ length: 16 }, (_, i) => ({ ...player(`p${i}`, teams[Math.floor(rnd() * 4)]!, positions[Math.floor(rnd() * positions.length)]!), preferred: rnd() < 0.3 }));
+        const day = optimizeDay('2027-03-01', roster, seats, s);
+        const kept: LineupPlayer[] = [];
+        for (const p of [...roster.filter((p) => p.preferred), ...roster.filter((p) => !p.preferred)]) if (canStartTogether([...kept, p], seats)) kept.push(p);
+        expect([...seatedIds(day)].sort()).toEqual(kept.map((p) => p.id).sort());
+        expect(day.usable).toBe(day.optimalUsable);
+      }
+    }
+  });
+});
