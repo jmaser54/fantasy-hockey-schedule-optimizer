@@ -1,0 +1,39 @@
+name: Probe NHL stats API
+
+# Player Evaluator data proof of concept: checks the NHL Stats REST skater
+# reports from GitHub's network (the dev container can't reach the NHL APIs).
+# Investigation only - writes nothing to the repository or the site.
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        description: 'NHL season id'
+        default: '20262027'
+  push:
+    paths:
+      - 'scripts/probe-nhl-stats.mjs'
+      - '.github/workflows/probe-nhl-stats.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Probe skater reports
+        env:
+          SEASON: ${{ inputs.season || '20262027' }}
+        run: node scripts/probe-nhl-stats.mjs
+      - name: Upload raw responses and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nhl-stats-probe
+          path: data-raw/stats-probe/
+          if-no-files-found: ignore

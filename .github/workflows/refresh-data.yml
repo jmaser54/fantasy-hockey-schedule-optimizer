@@ -50,7 +50,7 @@ jobs:
             echo "No data changes."
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            git commit -m "data: refresh NHL schedule and player directory"
+            git commit -m "data: refresh NHL schedule, player directory and skater stats"
             git pull --rebase origin "${GITHUB_REF_NAME}"
             git push origin "HEAD:${GITHUB_REF_NAME}"
             echo "changed=true" >> "$GITHUB_OUTPUT"

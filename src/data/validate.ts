@@ -5,7 +5,7 @@
  */
 import { isValidISODate } from '../domain/dates.ts';
 import { POSITIONS } from '../domain/types.ts';
-import { DATA_VERSION, type PlayersFile, type ScheduleFile } from './format.ts';
+import { DATA_VERSION, type PlayersFile, type ScheduleFile, type SkaterStatsFile } from './format.ts';
 
 export interface ValidationResult {
   errors: string[];
@@ -98,5 +98,68 @@ export function validatePlayers(data: unknown, teamIds: ReadonlySet<string>): Va
     }
   }
   if (file.players.length < 500) warnings.push(`Only ${file.players.length} players in the directory.`);
+  return { errors, warnings };
+}
+
+const COUNTING_STATS = ['gamesPlayed', 'goals', 'assists', 'points', 'penaltyMinutes', 'ppPoints', 'shPoints', 'shots', 'hits', 'blockedShots', 'faceoffWins'] as const;
+const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v);
+const isFraction = (v: unknown): v is number => typeof v === 'number' && v >= 0 && v <= 1;
+
+/**
+ * Player Evaluator skater statistics (public/data/skater-stats.json).
+ * `teamIds` checks team codes; `previous` (same season) guards against a
+ * snapshot that suddenly lost players, since a skater who has played never
+ * drops out of the season's list.
+ */
+export function validateSkaterStats(
+  data: unknown,
+  opts: { season?: string; teamIds?: ReadonlySet<string>; previous?: SkaterStatsFile } = {},
+): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  if (!isObj(data)) return { errors: ['Skater stats file is not an object.'], warnings };
+  if (data.version !== DATA_VERSION) errors.push(`Unsupported skater stats version ${String(data.version)}.`);
+  if (typeof data.season !== 'string' || !/^\d{8}$/.test(data.season)) errors.push('Skater stats file has no season.');
+  else if (opts.season && data.season !== opts.season) errors.push(`Skater stats are for season ${data.season}; expected ${opts.season}.`);
+  if (data.gameType !== 2) errors.push(`Skater stats are for game type ${String(data.gameType)}; expected 2 (regular season).`);
+  if (typeof data.fetchedAt !== 'string' || Number.isNaN(Date.parse(data.fetchedAt))) errors.push('Skater stats file has no valid fetchedAt.');
+  if (!Array.isArray(data.skaters)) return { errors: [...errors, 'Skater stats file has no skaters.'], warnings };
+  const file = data as unknown as SkaterStatsFile;
+  const ids = new Set<number>();
+  for (const s of file.skaters) {
+    if (!isObj(s) || !isInt(s.nhlId) || typeof s.name !== 'string' || !s.name || !Array.isArray(s.teams) || s.teams.length === 0) {
+      errors.push('Malformed skater stats record.');
+      continue;
+    }
+    const who = `${s.name} (${s.nhlId})`;
+    if (ids.has(s.nhlId)) errors.push(`Skater ${s.nhlId} appears twice.`);
+    ids.add(s.nhlId);
+    if (!['C', 'L', 'R', 'D'].includes(s.position as string)) errors.push(`${who} has unknown position ${String(s.position)}.`);
+    for (const t of s.teams) if (typeof t !== 'string' || (opts.teamIds && !opts.teamIds.has(t))) errors.push(`${who} has unknown team ${String(t)}.`);
+    const bad = COUNTING_STATS.filter((k) => !isInt(s[k]) || (s[k] as number) < 0);
+    if (bad.length) {
+      errors.push(`${who} has invalid ${bad.join(', ')}.`);
+      continue;
+    }
+    if (!isInt(s.plusMinus)) errors.push(`${who} has invalid plusMinus.`);
+    if (s.gamesPlayed < 1) errors.push(`${who} has ${s.gamesPlayed} games played.`);
+    if (s.goals + s.assists !== s.points) errors.push(`${who}: goals + assists ≠ points.`);
+    if (s.ppPoints + s.shPoints > s.points) errors.push(`${who}: PP + SH points exceed points.`);
+    if (s.shots === 0 ? s.shootingPct !== null : !isFraction(s.shootingPct) || Math.abs(s.shootingPct - s.goals / s.shots) > 1e-3) {
+      errors.push(`${who} has inconsistent shooting percentage.`);
+    }
+    if (s.faceoffWinPct !== null && !isFraction(s.faceoffWinPct)) errors.push(`${who} has invalid faceoff percentage.`);
+    if (s.faceoffWins > 0 && !s.faceoffWinPct) errors.push(`${who} has faceoff wins but no faceoff percentage.`);
+    if (typeof s.toiPerGame !== 'number' || !(s.toiPerGame > 0) || s.toiPerGame > 3600) errors.push(`${who} has invalid time on ice.`);
+  }
+  if (file.skaters.length === 0) errors.push('Skater stats file has no skaters.');
+  const prev = opts.previous;
+  if (prev && prev.season === file.season && Array.isArray(prev.skaters)) {
+    if (file.skaters.length < prev.skaters.length * 0.9) {
+      errors.push(`Only ${file.skaters.length} skaters; the previous snapshot had ${prev.skaters.length}.`);
+    } else if (file.skaters.length < prev.skaters.length) {
+      warnings.push(`${prev.skaters.length - file.skaters.length} fewer skaters than the previous snapshot.`);
+    }
+  }
   return { errors, warnings };
 }

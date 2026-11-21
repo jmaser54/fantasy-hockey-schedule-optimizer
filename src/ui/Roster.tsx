@@ -70,10 +70,10 @@ export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
           </div>
           {mode === 'search' && (
             <div className="add-bar">
-              <PlayerSearch onPick={add} exclude={onRoster} autoFocus placeholder="Add a player by name…" />
+              <PlayerSearch onPick={add} exclude={onRoster} placeholder="Add a player by name…" />
             </div>
           )}
-          {mode === 'paste' && !review && <PasteBox onParsed={setReview} autoFocus={state.roster.length === 0} />}
+          {mode === 'paste' && !review && <PasteBox onParsed={setReview} />}
           {mode === 'paste' && review && (
             <ImportReview
               lines={review}
@@ -112,7 +112,8 @@ export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
   );
 }
 
-function PasteBox({ onParsed, autoFocus }: { onParsed: (lines: ReviewLine[]) => void; autoFocus?: boolean }) {
+/** No autofocus: focusing on mount made phones zoom or jump when switching modes (owner report, 2026-11-21). */
+function PasteBox({ onParsed }: { onParsed: (lines: ReviewLine[]) => void }) {
   const { data } = useApp();
   const index = usePlayerIndex();
   const [text, setText] = useState('');
@@ -134,7 +135,6 @@ function PasteBox({ onParsed, autoFocus }: { onParsed: (lines: ReviewLine[]) => 
         onChange={(e) => setText(e.target.value)}
         placeholder={'Connor McDavid\nQuinn Hughes, VAN\nIgor Shesterkin\n…'}
         aria-label="Paste player names"
-        autoFocus={autoFocus}
       />
       <div>
         <button className="btn primary" disabled={!text.trim()} onClick={parse}>

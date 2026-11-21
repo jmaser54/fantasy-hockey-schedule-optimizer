@@ -10,6 +10,7 @@ import type { ISODate, Player } from '../domain/types.ts';
 import { STORAGE_KEY, deserialize, loadFromStorage, reducer, saveToStorage } from '../state/appState.ts';
 import { Ctx, useApp, type AppCtx, type Window } from './context.ts';
 import { AboutView } from './About.tsx';
+import { EvaluatorView } from './Evaluator.tsx';
 import { ContactForm } from './Contact.tsx';
 import { LineupView } from './Lineup.tsx';
 import { RankingsView } from './Rankings.tsx';
@@ -23,13 +24,28 @@ const TABS = [
   { id: 'lineup', label: 'Lineup' },
   { id: 'trades', label: 'Trade Lab' },
 ] as const;
-type TabId = (typeof TABS)[number]['id'];
+/** Player Evaluator's destinations (no period bar). */
+const EVALUATOR_TABS = [
+  { id: 'evaluator', label: 'Roster Evaluation' },
+  { id: 'player-rankings', label: 'Player Rankings' },
+] as const;
+const ALL_TABS = [...TABS, ...EVALUATOR_TABS];
+type TabId = (typeof ALL_TABS)[number]['id'];
+const isEvaluatorTab = (t: TabId) => EVALUATOR_TABS.some((e) => e.id === t);
+
+/** The two equal product areas (primary navigation); each shows its own destinations beneath. */
+type AreaId = 'planner' | 'evaluator';
+const AREAS: { id: AreaId; label: string; first: TabId }[] = [
+  { id: 'planner', label: 'Games Optimizer', first: 'rankings' },
+  { id: 'evaluator', label: 'Player Normalizer', first: 'evaluator' },
+];
+const areaOf = (t: TabId): AreaId => (isEvaluatorTab(t) ? 'evaluator' : 'planner');
 
 const isAboutHash = () => globalThis.location?.hash === '#about';
 
 function tabFromHash(): TabId {
   const h = globalThis.location?.hash.replace('#', '');
-  return (TABS.find((t) => t.id === h)?.id ?? 'rankings') as TabId;
+  return (ALL_TABS.find((t) => t.id === h)?.id ?? 'rankings') as TabId;
 }
 
 export function App() {
@@ -76,7 +92,7 @@ export function App() {
   useEffect(() => {
     if (tab === trackedTab.current) return;
     trackedTab.current = tab;
-    trackTabView(TABS.find((t) => t.id === tab)!.label);
+    trackTabView(ALL_TABS.find((t) => t.id === tab)!.label);
   }, [tab]);
 
   useEffect(() => {
@@ -97,6 +113,10 @@ export function App() {
   }, [toastMsg]);
 
   const toast = useCallback((m: string) => setToastMsg(m), []);
+  // Each product area reopens on the destination last used in it (this visit only).
+  const area = areaOf(tab);
+  const lastTab = useRef<Partial<Record<AreaId, TabId>>>({});
+  lastTab.current[area] = tab;
   const go = (id: TabId) => {
     history.replaceState(null, '', `#${id}`);
     setTab(id);
@@ -115,27 +135,52 @@ export function App() {
         </div>
       </header>
       <div className="tabbar">
-        <div className="topbar-inner tabbar-row">
-          <button className="settings-btn" onClick={() => setSettingsOpen(true)} title="Review and adjust your league settings">
-            <span aria-hidden="true">⚙︎</span> League Settings
-          </button>
-          <nav className="tabs" role="tablist">
-            {TABS.map((t) => (
-              <button key={t.id} role="tab" className="tab" aria-selected={!about && tab === t.id} aria-label={'short' in t ? t.label : undefined} onClick={() => go(t.id)}>
-                {'short' in t ? (
-                  <>
-                    <span className="label-full">{t.label}</span>
-                    <span className="label-short" aria-hidden="true">
-                      {t.short}
-                    </span>
-                  </>
-                ) : (
-                  t.label
-                )}
-                {t.id === 'roster' && state.roster.length > 0 && <span className="count">{state.roster.length}</span>}
+        <div className="topbar-inner area-row">
+          <nav className="areas" aria-label="Product area">
+            {AREAS.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                className="area"
+                aria-current={area === a.id ? 'true' : undefined}
+                onClick={() => area !== a.id && go(lastTab.current[a.id] ?? a.first)}
+              >
+                {a.label}
               </button>
             ))}
           </nav>
+          <button className="settings-btn" onClick={() => setSettingsOpen(true)} title="Review and adjust your league settings">
+            <span aria-hidden="true">⚙︎</span> League Settings
+          </button>
+        </div>
+        <div className="topbar-inner tabbar-row">
+          {area === 'planner' ? (
+            <nav className="tabs planner-tabs" role="tablist" aria-label="Games Optimizer">
+              {TABS.map((t) => (
+                <button key={t.id} role="tab" className="tab" aria-selected={!about && tab === t.id} aria-label={'short' in t ? t.label : undefined} onClick={() => go(t.id)}>
+                  {'short' in t ? (
+                    <>
+                      <span className="label-full">{t.label}</span>
+                      <span className="label-short" aria-hidden="true">
+                        {t.short}
+                      </span>
+                    </>
+                  ) : (
+                    t.label
+                  )}
+                  {t.id === 'roster' && state.roster.length > 0 && <span className="count">{state.roster.length}</span>}
+                </button>
+              ))}
+            </nav>
+          ) : (
+            <nav className="tabs evaluator-tabs" role="tablist" aria-label="Player Normalizer">
+              {EVALUATOR_TABS.map((t) => (
+                <button key={t.id} role="tab" className="tab" aria-selected={!about && tab === t.id} onClick={() => go(t.id)}>
+                  {t.label}
+                </button>
+              ))}
+            </nav>
+          )}
         </div>
       </div>
       <main>
@@ -153,7 +198,7 @@ export function App() {
             dispatch={dispatch}
             data={status.data}
             toast={toast}
-            periodBar={!about}
+            periodBar={!about && !isEvaluatorTab(tab)}
             showModes={tab !== 'roster'}
             onOpenSettings={() => setSettingsOpen(true)}
             overlay={settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
@@ -163,6 +208,8 @@ export function App() {
             {!about && tab === 'roster' && <RosterView onGoLineup={() => go('lineup')} />}
             {!about && tab === 'lineup' && <LineupView onGoRoster={() => go('roster')} />}
             {!about && tab === 'trades' && <TradesView onGoRoster={() => go('roster')} />}
+            {/* One element for both destinations, so the shared state survives switching between them. */}
+            {!about && isEvaluatorTab(tab) && <EvaluatorView page={tab === 'player-rankings' ? 'rankings' : 'roster'} onGoRoster={() => go('roster')} />}
           </Ready>
         )}
       </main>

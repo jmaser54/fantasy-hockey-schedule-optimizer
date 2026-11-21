@@ -7,15 +7,20 @@
  * Fetches from the NHL web API (schedule, teams, rosters) and, optionally,
  * ESPN's fantasy player pool (eligibility). Every response is parsed
  * strictly and the merged result is validated; if validation fails nothing
- * is written. Raw samples and a report go to data-raw/ (git-ignored) for
- * inspection. Run by .github/workflows/refresh-data.yml on a schedule.
+ * is written. Then refreshes Player Evaluator skater stats from the NHL Stats
+ * REST API (public/data/skater-stats.json); that step is independent: if it
+ * fails, the previous stats file is kept, the failure is logged, and the
+ * schedule/player refresh still succeeds. Raw samples and a report go to
+ * data-raw/ (git-ignored) for inspection. Run by
+ * .github/workflows/refresh-data.yml on a schedule.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { DATA_VERSION, type PlayersFile, type ScheduleFile } from '../src/data/format.ts';
+import { DATA_VERSION, type PlayersFile, type ScheduleFile, type SkaterStatsFile } from '../src/data/format.ts';
 import { ESPN_FILTER, espnPlayersUrl, parseEspnPlayers, type EspnPlayer } from '../src/data/pipeline/espn.ts';
 import { mergeClubSchedules, NHL_BASE, parseClubSchedule, parseRoster, parseStandingsTeams, type NhlRosterPlayer } from '../src/data/pipeline/nhl.ts';
 import { reconcilePlayers } from '../src/data/pipeline/reconcile.ts';
-import { validatePlayers, validateSchedule } from '../src/data/validate.ts';
+import { fetchStatsReport, joinSkaterStats, STATS_BASE, STATS_REPORTS, type StatsReport } from '../src/data/pipeline/stats.ts';
+import { validatePlayers, validateSchedule, validateSkaterStats } from '../src/data/validate.ts';
 import type { Game } from '../src/domain/types.ts';
 
 const SEASON = process.env.SEASON ?? '20262027';
@@ -150,8 +155,40 @@ async function main() {
 
   await writeFile(`${OUT_DIR}/schedule.json`, JSON.stringify(schedule));
   await writeFile(`${OUT_DIR}/players.json`, JSON.stringify(players));
-  await writeFile(`${RAW_DIR}/report.txt`, report.join('\n'));
   log('Wrote public/data/schedule.json and public/data/players.json');
+
+  try {
+    await refreshSkaterStats(new Set(teams.map((t) => t.id)), fetchedAt);
+  } catch (err) {
+    // Must not block the schedule/player refresh: keep the last good file.
+    log(`Skater stats refresh FAILED; kept the previous ${OUT_DIR}/skater-stats.json: ${(err as Error).message}`);
+    console.log(`::warning title=Skater stats refresh failed::${(err as Error).message.replace(/\s+/g, ' ').slice(0, 300)}`);
+  }
+  await writeFile(`${RAW_DIR}/report.txt`, report.join('\n'));
+}
+
+/** Player Evaluator stats: fetch 3 reports, join, validate, then write. Throws on any problem (nothing written). */
+async function refreshSkaterStats(teamIds: ReadonlySet<string>, fetchedAt: string) {
+  const reports = {} as Record<StatsReport, Record<string, unknown>[]>;
+  for (const report of STATS_REPORTS) {
+    const { rows, firstPage } = await fetchStatsReport(getJson, report, SEASON);
+    await saveRaw(`stats-${report}-page1.json`, firstPage);
+    reports[report] = rows;
+  }
+  const stats: SkaterStatsFile = {
+    version: DATA_VERSION,
+    season: SEASON,
+    gameType: 2,
+    fetchedAt,
+    source: `${STATS_BASE}/skater/{${STATS_REPORTS.join(',')}}`,
+    skaters: joinSkaterStats(reports, SEASON),
+  };
+  const previous = await readPrevious<SkaterStatsFile>(`${OUT_DIR}/skater-stats.json`);
+  const v = validateSkaterStats(stats, { season: SEASON, teamIds, previous });
+  v.warnings.forEach((w) => log(`  warning: ${w}`));
+  if (v.errors.length) throw new Error(`Skater stats validation failed:\n${v.errors.slice(0, 30).join('\n')}`);
+  await writeFile(`${OUT_DIR}/skater-stats.json`, JSON.stringify(stats));
+  log(`Wrote ${OUT_DIR}/skater-stats.json: ${stats.skaters.length} skaters`);
 }
 
 main().catch(async (err) => {

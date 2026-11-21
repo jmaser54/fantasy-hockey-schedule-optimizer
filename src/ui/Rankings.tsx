@@ -382,7 +382,7 @@ function ScheduleGrid() {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.team} className={byTeam.get(r.team)?.length ? 'mine-row' : undefined}>
+              <tr key={r.team}>
                 <th className="sticky" scope="row" title={data.teams.find((t) => t.id === r.team)?.name}>
                   {r.team} {byTeam.get(r.team)?.length ? <span className="mine-dot" title="You have players on this team" /> : null}
                 </th>

@@ -9,9 +9,9 @@ Labels used below:
 - **Implemented**: verified in the current code; not necessarily an explicit requirement.
 - **Open**: unresolved; ask before changing behavior.
 
-Last reviewed against commit `c9af699` (2026-10-19); sections touched by the 2026-11-12 changes reviewed against the code.
+Last reviewed against commit `2430b9662da3bc7de067f465d79edbeb1feff43a` (2026-11-19); existing behavior reviewed against the testing repository, and Player Evaluator decisions recorded in §I. §I's NHL statistics findings were added on 2026-11-20 from the probe run at `67ea97e`, and the skater-stats pipeline step (§C, §F, §I) was reviewed against the code on 2026-11-20. On 2026-11-20 the owner's Player Evaluator decisions (minimum GP, benchmarks, ranking categories, persistence) were recorded in §I, and the Step 3 saved-roster integration (§C, §E, §F, §I) was reviewed against the code. The Step 4 prototype UI (§B, §C, §E, §F, §I) and the owner's Step 4 decisions were recorded on 2026-11-20 and reviewed against the code; the owner's first prototype revisions (two navigation families, two evaluator destinations, merged comparison rows, multi-column rankings) were recorded and reviewed on 2026-11-21, followed the same day by the owner's second iteration (equal product areas in the navigation, league max as the default benchmark, a leaner Player Rankings header).
 
-**Testing repo:** `jmaser54/fantasy-hockey-schedule-optimizer-testing` (default branch `main`, site https://jmaser54.github.io/fantasy-hockey-schedule-optimizer-testing/) is where the owner tries changes before they come here. Rounds 1–3 (its commits `5c2d2dc`, `952152a`, `004f18f`) rounds 4–8 (`847d860`, `80ef25a`, `9a0a2e4`, `67ba9b7`, `f6bfde0`) were brought to live on 2026-11-12, the star-priority work (`ebe66e4`, `42f6e30`, `d2ca6cb`) on 2026-11-13, and the reset tests, tab sync, testing-storage isolation and reset wording (`f93f1fc`, `58666ef`, `c7026b8`, `7d98f11`) on 2026-11-13. The testing repo has its own `CLAUDE.md` and copy of this document, and no GA tag.
+**This copy lives in the live repo** `jmaser54/fantasy-hockey-schedule-optimizer` (default branch `claude/practical-faraday-ti8p02`, site https://jmaser54.github.io/fantasy-hockey-schedule-optimizer/). Changes are tried first in the testing repo `jmaser54/fantasy-hockey-schedule-optimizer-testing` (default branch `main`, site https://jmaser54.github.io/fantasy-hockey-schedule-optimizer-testing/). On 2026-11-21 the owner approved promoting testing commit `8ea06b1` (Player Evaluator / Player Normalizer MVP and the Games Optimizer navigation) here unchanged, except for the live-only files: `index.html` (GA tag, below), `CLAUDE.md`, and the live data snapshots `schedule.json` and `players.json`. Parts of this document written in the testing repo still say "here" or "the testing repo" for work done there first; the code described is now also live.
 
 ---
 
@@ -68,7 +68,7 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`). The site opens on T
 - Desktop appearance must not change when making mobile improvements.
 - **Mobile Phase 1 (done, commit `284c651`):**
   - Roster rows show in two lines at ≤600px.
-  - All four tabs fit at ≤600px; "Team Schedules" shows as "Schedules", with the accessible name unchanged.
+  - All four Playoff Planner tabs fit at ≤600px; "Team Schedules" shows as "Schedules", with the accessible name unchanged. Since 2026-11-21 they sit in a secondary row under the product-area row (Games Optimizer / Player Normalizer, two-line labels at ≤600px, §I).
   - (Superseded in round 2: League Settings is now a labeled button at every width.)
   - Larger tap targets under `@media (pointer: coarse)`.
 - Phases 2 and 3 of the mobile plan aren't done (§H).
@@ -86,6 +86,7 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`). The site opens on T
   - roster 22, IR 2;
   - slots: C×2, LW×2, RW×2, D×4, UTIL×1 (C/LW/RW/D), G×2;
   - rounds: R1 2027-02-22→03-07, R2 03-08→03-21, R3 03-22→04-04.
+- Switching between Paste Roster and Search Players never focuses an input (no `autoFocus`; removed 2026-11-21 because focusing made phones zoom or jump). The fields work normally when tapped.
 - Paste import auto-accepts **exact** name matches only. Ambiguous names (e.g. two Elias Petterssons) and typos are never guessed; the user chooses (`src/domain/rosterImport.ts` `matchName`).
 - Clear Roster lives inside the roster panel and needs confirmation. It keeps settings, rounds, custom players and Trade Lab adds.
 - The "Not on NHL Roster" badge and the "not on NHL roster" labels in search and paste review were removed from the UI. The `inactive` data flag stays (§D, §H).
@@ -141,7 +142,7 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`). The site opens on T
   - The tab always shows, in order: "Games per Night", "NHL Team Schedules", then "Schedule Grid". The old "Team Rankings / Schedule Grid" toggle is gone (owner decision, 2026-11-12). Rankings are consistent with the selected window; columns sort ascending and descending.
   - The Schedule Grid covers the selected window: 7 days in Next Week, the full window in Playoffs or Custom.
   - NHL Team Schedules shows a "Full Playoffs" context column for a single round or a Custom period, but **not in Next Week** (owner decision, round 8). In Next Week the table (`table.next-week`) lets its headers wrap on phones so every column, Your Players included, fits at 360px. The Full Playoffs view itself (rounds + Total) is unchanged.
-  - **Roster highlight:** grid rows for teams with at least one roster player get `tr.mine-row`: light-blue row header with a blue left edge, and light-blue off-day cells, also on hover. Game cells keep their grey (`--surface-2`) background. The existing `mine-dot` stays. No highlight with an empty roster.
+  - **Roster indicator:** teams with at least one roster player show the blue `mine-dot` beside the team code. The light-blue row shading (`tr.mine-row`) was removed at the owner's request on 2026-11-21, restoring the plain rows; other grid formatting is unchanged.
   - Games-per-night bars show that night's matchups; "Your Players" counts are clickable.
   - The Schedule Grid shows daily NHL game counts, with dates larger than the counts, and has no mouse-following hover lines.
 
@@ -174,7 +175,7 @@ Primary workflows (tabs, in order; `src/ui/App.tsx` `TABS`). The site opens on T
   - No GA page view is sent for About (unchanged analytics behavior).
 
 ### Analytics and contact (Confirmed / Implemented)
-- **GA4:** tag `G-NYB64MVCVE` in `index.html` (live only; the testing repo removed it so test visits don't count). When bringing changes over from the testing repo, keep this tag.
+- **GA4 (live repo only):** the live repo has tag `G-NYB64MVCVE` in `index.html`. **The testing repo has no GA tag** (removed in round 2 so test visits don't count in live analytics). `src/analytics.ts` still exists here and does nothing when `gtag` isn't loaded. Don't copy the tag removal to the live repo by accident.
   - One `page_view` per in-app tab change, with page title "Playoff Planner – <Tab>" (`src/analytics.ts`, called from `App.tsx`).
   - No custom events, no Google Tag Manager, no Firebase.
   - Don't change the Measurement ID without explicit instruction (§H).
@@ -194,10 +195,13 @@ Vite 6 + React 18 + TypeScript (strict), Vitest. No runtime dependencies besides
 |---|---|---|
 | Entry | `index.html`, `src/main.tsx`, `src/ui/App.tsx` | Shell, tabs (hash routing via `tabFromHash`), the About view (`#about` via `isAboutHash`; `about` state, separate from `tab`), header (brand, subtitle, how-it-works strip, sticky `.tabbar`), data loading, footer (`DataFooter`: data note plus Contact and About links), `ContactModal`, toast. `Ready` holds the period mode and custom periods, builds the app context, and renders the period bar (`PeriodBar`, `CustomEditor`) unless `periodBar` is false, plus the Settings modal (`overlay`). |
 | Context | `src/ui/context.ts` | `AppCtx`: `state`, `dispatch`, `data`, `resolve`, `teams`, `windows` (current mode), `playoffWindows`, `selected`, `lineupPlayers`, `days`, `summarizeWindow`, `toast`. |
+| Evaluator preferences | `src/state/evaluatorPrefs.ts` | Player Evaluator comparison players, benchmark choice and rankings minimum GP, in their own storage key (§E, §I). |
+| Player Evaluator UI | `src/ui/Evaluator.tsx`, `src/ui/evaluatorFormat.ts` | The Player Evaluator destinations, Roster Evaluation (`#evaluator`) and Player Rankings (`#player-rankings`), under one `EvaluatorView`: lazy stats load, shared benchmark bar, the two stat tables (§I). Pure display helpers (stat groups, short labels, formatting, stats-name search, comparison-row merge and sorting) in `evaluatorFormat.ts`. |
 | State | `src/state/appState.ts` | `AppState`, `reducer` (actions: select, setCustom, setPeriods, setLeague, addPlayers, removePlayer, updateEntry, replacePlayer, addCustomPlayer, clearRoster, setManual, clearManual, scenario, scenarioApply), `proposedRoster`, tolerant `deserialize`/`serialize`, `loadFromStorage`/`saveToStorage`. |
-| Domain (pure, tested) | `src/domain/*` | `optimizer.ts` (daily lineup, priorities, overrides, totals), `matching.ts` (Kuhn bipartite matching), `capacity.ts` (daily group counts, `lineupGroupTotals`), `roster.ts` (`validateRoster`, `describeIssue`, `toLineupPlayers`, `effectivePositions`), `schedule.ts` (`ScheduleIndex`, `teamOnDate`, `playerGameOn`, `playerGames`, `opponent`), `league.ts`, `dates.ts`, `rankings.ts`, `teamSchedules.ts`, `rosterImport.ts`, `names.ts`, `types.ts`. |
+| Domain (pure, tested) | `src/domain/*` | `optimizer.ts` (daily lineup, priorities, overrides, totals), `matching.ts` (Kuhn bipartite matching), `capacity.ts` (daily group counts, `lineupGroupTotals`), `roster.ts` (`validateRoster`, `describeIssue`, `toLineupPlayers`, `effectivePositions`), `schedule.ts` (`ScheduleIndex`, `teamOnDate`, `playerGameOn`, `playerGames`, `opponent`), `league.ts`, `dates.ts`, `rankings.ts`, `teamSchedules.ts`, `rosterImport.ts`, `names.ts`, `types.ts`, `evaluator.ts` (Player Evaluator calculations and league-wide ranking data, §I). |
 | Data load | `src/data/load.ts`, `src/data/format.ts`, `src/data/validate.ts` | Fetch `public/data/*.json`, validate, build `Dataset`; `isStale` (more than 3 days old); `buildPlayerLookup` (resolves `nhl-<id>`/`espn-<id>` aliases). |
-| Data pipeline (Node, CI only) | `scripts/refresh-data.ts`, `src/data/pipeline/{nhl,espn,reconcile}.ts` | Fetch NHL teams, schedules and rosters plus ESPN eligibility; strict parse; reconcile; validate; write `public/data/{schedule,players}.json`. |
+| Evaluator data | `src/data/evaluatorData.ts` | `buildSkaterStats` / `loadSkaterStats` (validate and fetch `skater-stats.json`, separately from `loadDataset`) and `evaluateSavedRoster` (reads the saved roster into `evaluator.ts`, §I). Used only by the Player Evaluator tab. |
+| Data pipeline (Node, CI only) | `scripts/refresh-data.ts`, `src/data/pipeline/{nhl,espn,reconcile,stats}.ts` | Fetch NHL teams, schedules and rosters plus ESPN eligibility; strict parse; reconcile; validate; write `public/data/{schedule,players}.json`. Then, as an independent step, fetch the NHL Stats REST skater reports, join them, validate, and write `public/data/skater-stats.json` (§I). The app fetches that file only when the Player Evaluator tab is opened (`loadSkaterStats`). |
 | UI pages | `src/ui/Rankings.tsx`, `Roster.tsx`, `Lineup.tsx`, `Trades.tsx`, `Settings.tsx`, `Contact.tsx`, `common.tsx` | `common.tsx`: `PosBadges`, `PosToggles`, `PlayerSearch`, `Delta`, `InfoTip`, `PreferredToggle`. |
 | Other | `src/analytics.ts`, `src/contact.ts`, `src/styles.css` | GA page views, contact config, all CSS (tokens on `:root`, phone and touch media queries at the end). |
 
@@ -274,6 +278,7 @@ Each rule below is enforced by the code or tests named; keep them true.
   - Key `playoff-optimizer:v1` in `localStorage` (`STORAGE_KEY`, `STATE_VERSION = 1`).
   - Saved on every state change (`App.tsx` effect, then `saveToStorage`).
   - If storage fails, a banner says changes can't be saved.
+  - **Player Evaluator preferences (Confirmed 2026-11-20; Implemented in `src/state/evaluatorPrefs.ts`, used by the Player Evaluator tab):** comparison players (NHL ids), the selected benchmark and the rankings minimum GP (default 10) are kept under a separate key, `playoff-evaluator:v1` (live and local) or `playoff-evaluator-testing:v1` (testing base), shape `{version: 2, comparisons, benchmark, minGamesPlayed}`. Saved on every change from the tab; not synced between open tabs (the roster is). Never stored in the app state, so saving them can't touch the roster. Benchmarks are stored as the choice (`league-max`, `roster-max`, a player, or a custom number), never a resolved GP, so they stay dynamic. Version 2 (2026-11-21) made league max the default; version 1 always saved its default (`roster-max`), so a version-1 `roster-max` loads as league max, while version-1 player and custom choices are kept. Loading is tolerant (bad fields fall back to defaults).
   - No backend. The roster and settings never leave the browser. The only outbound traffic is the GA tag (page load plus a page view per tab change) and contact form posts.
 - **Saved data:**
   - `league` (rosterSize, irSlots, slots), `periods`, `custom` range, `selection`;
@@ -295,7 +300,14 @@ Each rule below is enforced by the code or tests named; keep them true.
 ## F. Testing, builds and deployment
 
 **Commands** (`package.json`):
-- `npm test`: `vitest run`. Currently 85 tests in 9 files:
+- `npm test`: `vitest run`. On 2026-11-21 (latest iteration) it ran **200 tests in 16 files**, including:
+  - `src/data/pipeline/stats.test.ts` (16: stats request URL, pagination, report join, `validateSkaterStats`);
+  - `src/domain/evaluator.test.ts` (32: normalization, roster classification, benchmarks incl. the league-max default, roster-max fallback and season limit, comparisons, rankings incl. the 10-GP default, PIM/+/-, direction and position filter);
+  - `src/data/evaluatorData.test.ts` (8: the saved roster read through `deserialize(serialize())` and never changed, IR/goalie/ESPN-only/custom/alias handling, preferences applied, the published snapshot against the published directory);
+  - `src/state/evaluatorPrefs.test.ts` (10: separate per-site keys, round trip incl. min GP, league-max default and version-1 migration, clearing comparison players, tolerant parse, saving prefs leaves the roster key byte-for-byte unchanged);
+  - `src/ui/evaluatorFormat.test.ts` (6: stat groups, value formatting, stats-name search, comparison players inserted by position, roster and comparison rows sorted together).
+
+   The rest of the per-file list below predates that and is stale (Open: refresh it when this section is next reviewed):
   - `src/domain/optimizer.test.ts` (20): spec cases 1–10, overrides, priorities, brute-force matching.
   - `capacity.test.ts` (7): summary reconciliation.
   - `domain.test.ts` (12): dates, league/IR validation, rankings.
@@ -305,7 +317,7 @@ Each rule below is enforced by the code or tests named; keep them true.
   - `src/analytics.test.ts` (3), `src/contact.test.ts` (2).
 - `npm run typecheck`: `tsc -b`.
 - `npm run build`: `tsc -b && vite build`, output in `dist/` (gitignored).
-- `node --experimental-strip-types --no-warnings scripts/check-data.ts`: validates the committed snapshot.
+- `node --experimental-strip-types --no-warnings scripts/check-data.ts`: validates the committed snapshot, plus `skater-stats.json` when present. It prints a warning instead of failing while that file doesn't exist yet.
 - `npm run data:refresh`: fetches NHL/ESPN data. **It can't run in the dev container**, which has no access to the NHL or ESPN APIs.
 
 **CI and deployment** (`.github/workflows/`):
@@ -318,11 +330,15 @@ Each rule below is enforced by the code or tests named; keep them true.
     - the data status chip and paste mode as the Roster default;
     - the Lineup heading matches `/of \d+ scheduled games fit your lineup/`;
     - the roster persists across a reload;
+    - Roster Evaluation loads the published skater stats and shows the roster with a "Normalized to N GP" benchmark; Player Rankings lists the roster player with roster shading; neither changes the saved roster;
     - Reset <period> to Optimal updates the visible lineup and saved data at once, and a change or reset in one tab shows in another open tab without a reload (skipped if McDavid has no game that week);
     - storage isolation: the other site's key is seeded with a different roster, which this site must never read, sync from or change;
     - GA hits are intercepted, not sent;
     - no browser errors.
-- `refresh-data.yml`: daily at 10:17 UTC, and on pushes that touch the pipeline. It tests, refreshes, commits `public/data` as `github-actions[bot]` if changed, then calls the deploy.
+- `probe-nhl-stats.yml`: Player Evaluator investigation only. It runs manually or on pushes to `scripts/probe-nhl-stats.mjs` or the workflow itself, prints an NHL Stats REST report to the job log, and uploads raw responses as the `nhl-stats-probe` artifact. It writes nothing to the repository or the site.
+- `refresh-data.yml`: daily at 10:17 UTC, and on pushes that touch the pipeline. It tests, refreshes, commits `public/data` as `github-actions[bot]` if changed (message "data: refresh NHL schedule, player directory and skater stats"), then calls the deploy.
+  - A schedule or player failure still fails the job and writes nothing.
+  - A skater-stats failure (fetch, parse, join or validation) keeps the previous `skater-stats.json`, logs the failure to the report and as a job `::warning` annotation, and doesn't block the schedule and player files (**Confirmed** 2026-11-20).
 - **Pushing to the default branch redeploys the live site.** Commit messages containing `[skip ci]` skip push-triggered workflows.
 - **What's published:** only what Vite builds, i.e. `index.html`, bundled `src/` and `public/` (data). `docs/`, `README.md`, `IMPLEMENTATION.md`, `CLAUDE.md` and `scripts/` are never published.
 
@@ -342,10 +358,12 @@ Each rule below is enforced by the code or tests named; keep them true.
    - For copy changes, diff to confirm no handler or condition changed.
 3. **The smoke test depends on copy:**
    - the Lineup heading regex;
-   - the Roster tab name `/^Roster/`;
+   - the Roster tab name `/^Roster(\s*\d+)?$/` (anchored at both ends since 2026-11-21: plain `/^Roster/` also matched the new "Roster Evaluation" tab and failed Playwright's strict mode; new tab names must not collide with these selectors);
    - the "Paste player names" label;
    - the "NHL data" status chip;
    - the Team Schedules table selector (`.table-wrap table`) and the `#rankings` start URL.
+
+   - the product-area buttons "Games Optimizer" and "Player Normalizer" (exact accessible names), the Player Evaluator tab names "Roster Evaluation" and "Player Rankings", and the `.planner-tabs` group.
 
    Renaming these without updating `scripts/smoke-test.mjs` fails the post-deploy job.
 4. **Global CSS selectors leak.**
@@ -392,5 +410,239 @@ Each rule below is enforced by the code or tests named; keep them true.
 | 10 | Priority granularity | ★ Preferred is binary. | Ties break by roster order. | No full ranking; the owner hasn't asked for one. | Yes, if requested |
 | 11 | Players with no positions | — | `LineupGrid` (`every` on an empty list) treats them as goalies; `isGoalieOnly` treats them as skaters. `validateRoster` reports `no-positions`. | Only reachable through an old saved custom player or a data record with no positions; the UI can't create one. | No (fix only if it matters) |
 | 12 | Lineup slot rows on phones | — | At 390px and 360px, each Daily Lineup Slots row is wider than the dialog: the G toggle is cut off and the remove (×) button sits off-screen, reachable only by scrolling the dialog sideways. Found on 2026-10-21; the overflow was already there before the Cancel/Save move. | Not fixed; outside that change. | No (fix when authorized) |
-| 14 | Testing site identity | — | The testing repo's `og:url` points to the live URL (as asked), so previews of the testing URL claim the live URL. | Matters only for the testing site. | Yes |
+| 14 | Testing site identity | — | The testing site's `og:url` points to the live URL (as asked). Its GA tag was removed in round 2. | Previews of the testing URL claim the live URL. | Yes |
 | 15 | Custom periods aren't saved | The owner said not to add persistence. | Custom-mode periods and the Total last only for the visit. | Users may expect them to survive a reload. | Yes |
+
+## I. Player Evaluator (new feature; product direction confirmed 2026-11-19)
+
+- Full feature requirements and implementation guidance: [`docs/PLAYER_EVALUATOR_SPEC.md`](PLAYER_EVALUATOR_SPEC.md).
+- **Working names only:** the existing schedule/lineup optimizer is provisionally called **Lineup Planner**; the new feature is provisionally **Player Evaluator**. **Confirmed 2026-11-21:** the top-level navigation labels are "Games Optimizer" (the schedule/lineup tools) and "Player Normalizer" (this feature); "Playoff Planner" stays the website name. Other user-facing naming is not locked.
+- **Product direction confirmed:** add a separate roster-wide skater statistical-normalization experience. It complements, but must not be merged into, the existing lineup optimization workflow.
+- **V1:** skaters only; current-season regular-season stats; actual and adjusted counting totals shown side by side; default benchmark is league max, the highest GP among all NHL skaters in the current season's stats (Confirmed 2026-11-21; previously the roster maximum). Adjust counting statistics by `actualStat / actualGP * benchmarkGP`. Leave percentages, per-game/per-minute averages, plus/minus and other context-dependent measures unchanged unless a statistic-specific decision is documented. Preserve actual values and clearly label the benchmark. This is a comparison of observed production rates, not a projection.
+- **Benchmark controls:** default league max, with roster max selectable; optional external NHL skater(s) for comparison; allow an external player to be selected as benchmark and allow a custom GP benchmark. External comparison players must not be added to or alter the saved fantasy roster.
+- **Roster and privacy:** reuse the existing saved browser-local roster and player-ID lookup. No accounts, backend, ESPN/Yahoo authorization, or repeated roster upload requirement. Existing roster paste/manual entry remains available.
+- **Goalies:** deliberately excluded from V1 pending separate design. Preserve goalies in the existing roster and explain their exclusion in Player Evaluator.
+- **Injury adjustment:** excluded from V1.
+- **Data:** current bundled player directory contains identity/team/position/eligibility data, not season performance stats. The skater-statistics snapshot and refresh step are **implemented** (below). The snapshot keeps the last good file on failure. The Player Evaluator tab fetches it when opened and shows its update time and a stale warning (below).
+
+### Verified NHL statistics source (data proof of concept, 2026-11-20)
+
+Verified from GitHub Actions (`.github/workflows/probe-nhl-stats.yml` running `scripts/probe-nhl-stats.mjs`, run 44678868587 at commit `67ea97e`) against live 2026–27 data. These are observations of an undocumented external API, not guarantees; the refresh must keep validating them.
+
+- **Endpoint:** `https://api.nhle.com/stats/rest/en/skater/{report}?isAggregate=false&isGame=false&start=<n>&limit=100&sort=[{"property":"playerId","direction":"ASC"}]&cayenneExp=gameTypeId=2 and seasonId<=20262027 and seasonId>=20262027`. No key or special headers. The `season` endpoint lists `20262027` (start 2026-09-29, regular season ends 2027-04-10, `numberOfGames` 84).
+- **Pagination:**
+  - Every request returns **at most 100 rows**. `limit=-1`, 101, 500 and 1000 all returned 100 rows with `total` 782. The `limit=-1` "fetch all" in the reference docs does not work.
+  - Page with `start` += 100 until `rows >= total`. That takes 8 pages per report, all four reports finished in under 15 s, and each report is about 0.5 MB.
+  - **Always sort on the unique `playerId`.** Unsorted pagination returned 25 duplicate and 5 missing players in `summary`. Sorted pagination returned exactly `total` rows with no duplicates.
+- **Coverage and IDs:**
+  - Each report returned 782 rows: 782 distinct `playerId`s, all with `gamesPlayed` ≥ 1 (range 1–25). By position: 272 D, 244 C, 137 R and 129 L.
+  - Skaters with 0 GP have **no row**, so a missing row means 0 GP or not an NHL skater.
+  - All 32 teams appear.
+  - `playerId` is the same NHL ID as `Player.nhlId` in `players.json`.
+- **Season and game type:**
+  - Every row has `seasonId` 20262027. **Rows have no `gameTypeId` field**, so game type can only be enforced through the query, which must always send `gameTypeId=2`.
+  - Preseason (`gameTypeId=1`) and playoffs (`3`) currently return 0 rows.
+  - An invalid `cayenneExp` returns HTTP 500, which the existing retry-then-throw `getJson` treats as a failure.
+- **Traded players:** with `isAggregate=false`, a traded player still has **one row** with season totals and `teamAbbrevs` as a comma list (8 rows, e.g. `"PIT,EDM"`; not alphabetical). `isAggregate=true` returns the same 782 players but drops `teamAbbrevs`. Use `isAggregate=false`, and take the current team from `players.json`, not from `teamAbbrevs`.
+- **Joining:**
+  - The four reports cover the identical 782 `playerId`s, so they join 1:1 on `playerId` with no orphans.
+  - The shared fields agree exactly (`gamesPlayed`, `otGoals`, `faceoffWinPct`, names, position, team, season), except `timeOnIcePerGame`, which is rounded differently: 4 decimals in `summary`, 2 in `realtime` and an integer in `faceoffpercentages`. Use `summary`'s value. It is in seconds per game.
+- **Internal consistency (0 violations across 782 rows):**
+  - `goals + assists = points`.
+  - `evGoals + ppGoals + shGoals = goals` and `evPoints + ppPoints + shPoints = points`.
+  - `shootingPct = goals/shots`, and is `null` exactly when shots = 0.
+  - `pointsPerGame = points/GP`.
+  - `totalFaceoffWins + totalFaceoffLosses = totalFaceoffs`.
+  - `faceoffWinPct = wins/total`, and is `null` exactly when total = 0 (337 players).
+  - `gamesPlayed` is equal across reports.
+  - League-wide faceoff wins equal losses (20,397).
+- **Fields by report** (all integers unless noted):
+  - **`summary`:**
+    - Counting: `gamesPlayed`, `goals`, `assists`, `points`, `plusMinus`, `penaltyMinutes`, `evGoals`, `evPoints`, `ppGoals`, `ppPoints`, `shGoals`, `shPoints`, `gameWinningGoals`, `otGoals`, `shots`.
+    - Rates (floats, nullable as above): `shootingPct`, `faceoffWinPct`, `pointsPerGame`, `timeOnIcePerGame`.
+    - Identity: `playerId`, `skaterFullName`, `lastName`, `positionCode` (C/L/R/D), `shootsCatches`, `teamAbbrevs`, `seasonId`.
+  - **`realtime`:**
+    - Counting: `hits`, `blockedShots`, `giveaways`, `takeaways`, `missedShots` (plus its breakdowns), `totalShotAttempts`, `shotAttemptsBlocked`, `emptyNetGoals`, `firstGoals`.
+    - Nullable: `emptyNetAssists` and `emptyNetPoints` (13 nulls).
+    - Per-60 rates: `hitsPer60`, `blockedShotsPer60`, `giveawaysPer60`, `takeawaysPer60`.
+  - **`faceoffwins`:** `totalFaceoffWins`, `totalFaceoffLosses` and `totalFaceoffs`, plus zone (`offensive`/`defensive`/`neutralZone…`) and situation (`ev`/`pp`/`sh…`) wins, losses and totals.
+  - **`faceoffpercentages`:** only the zone and situation percentages and totals. **V1 doesn't need it**: overall `faceoffWinPct` is already in `summary`, and wins come from `faceoffwins`.
+- **Coverage against `players.json`** (snapshot fetched 2026-11-19):
+  - 738 directory skaters have an `nhlId`. 713 of them have a stats row; 18 active-roster skaters have none, which is consistent with 0 GP.
+  - **69 skaters with 2026–27 stats have no `nhlId` in the directory**, for example Dylan Larkin (DET, 10 GP), Danton Heinen and Samuel Blais. They exist only as ESPN-only `inactive` entries (`espn-<id>`) because the NHL `roster/<team>/current` endpoint the pipeline uses didn't list them, presumably because they're injured or in the minors.
+  - **Confirmed (2026-11-20):** don't resolve these now, and don't change `players.json` for them. In Player Evaluator they are flagged transparently as unmatched/unavailable (spec §3.3), and individual players may be handled manually later. This must not delay V1.
+  - One directory team differs from the stats team (Mike Reilly: directory COL, stats CAR).
+
+**V1 statistics** (**Confirmed** 2026-11-20 as listed):
+
+| Treatment | Statistic | Source field |
+|---|---|---|
+| Scaled by GP | Goals, Assists, Points | `summary.goals`, `.assists`, `.points` |
+| Scaled by GP | Power-play points, Short-handed points | `summary.ppPoints`, `.shPoints` |
+| Scaled by GP | Shots on goal | `summary.shots` |
+| Scaled by GP | Penalty minutes | `summary.penaltyMinutes` |
+| Scaled by GP | Hits, Blocked shots | `realtime.hits`, `.blockedShots` |
+| Scaled by GP | Faceoff wins | `faceoffwins.totalFaceoffWins` |
+| Unchanged | Games played (the denominator) | `summary.gamesPlayed` |
+| Unchanged | Plus/minus (spec §3.4) | `summary.plusMinus` |
+| Unchanged | Shooting %, Faceoff % (`null` with 0 shots / 0 faceoffs) | `summary.shootingPct`, `.faceoffWinPct` |
+| Unchanged | TOI per game (seconds) | `summary.timeOnIcePerGame` |
+
+These are also available and verified, but not in V1: PPG, SHG, GWG, EV points, takeaways, giveaways, faceoff losses and totals, shot attempts.
+
+**Implemented snapshot and pipeline step** (2026-11-20):
+- **File:** `public/data/skater-stats.json` (`SkaterStatsFile` / `SkaterStatLine` in `src/data/format.ts`): `{ version: 1, season, gameType: 2, fetchedAt, source, skaters: [{ nhlId, name, teams, position, gamesPlayed, goals, assists, points, plusMinus, penaltyMinutes, ppPoints, shPoints, shots, hits, blockedShots, faceoffWins, shootingPct|null, faceoffWinPct|null, toiPerGame }] }`.
+  - One entry per `playerId`, sorted by `nhlId`.
+  - `teams` keeps the API order and isn't the current team.
+  - `toiPerGame` is in seconds.
+  - The first live snapshot (bot commit `c54a30d`, 2026-11-20) has 784 skaters (9 traded) and is 235 KB uncompressed; `check-data.ts` validates it.
+  - At that snapshot, **71** stats skaters had no `nhlId` in the directory (the confirmed-unresolved gap above; it moves daily). One reason: when a player leaves every NHL roster but stays in ESPN's pool, the refresh turns his `nhl-<id>` entry into an ESPN-only `espn-<id>` entry without `nhlId` (seen for Jani Nyman on 2026-11-20). This is pre-existing reconcile behavior, not caused by the stats step.
+- **`src/data/pipeline/stats.ts`:**
+  - `statsPageUrl` always sends `gameTypeId=2`, the season, `isAggregate=false`, a 100-row `limit` and a `playerId` sort.
+  - `fetchStatsReport` pages until `total`, and throws if the row count ≠ `total`, the total changes mid-fetch, or IDs repeat.
+  - `joinSkaterStats` strictly parses the fields above. It throws if the reports cover different players, disagree on `gamesPlayed`, include another season, or include a non-skater position. Reports used: `summary`, `realtime`, `faceoffwins`.
+- **`validateSkaterStats` (`src/data/validate.ts`) checks:**
+  - version, season and `gameType` 2, plus a valid `fetchedAt`;
+  - unique `nhlId`s, known positions, and team codes against the schedule's teams;
+  - integer counting stats ≥ 0, `gamesPlayed` ≥ 1, integer `plusMinus`;
+  - `goals + assists = points` and `ppPoints + shPoints ≤ points`;
+  - `shootingPct` is null exactly when shots = 0, otherwise equals `goals/shots`;
+  - `faceoffWinPct` is in [0, 1] or null, and present when there are faceoff wins;
+  - `0 < toiPerGame ≤ 3600`;
+  - against the previous same-season snapshot: an error below 90% of its count, a warning for any drop.
+- **`scripts/refresh-data.ts`:** after writing the schedule and players, runs `refreshSkaterStats` (3 reports, about 8 pages each, through the existing retrying `getJson`). It saves each report's first page to `data-raw/` and writes the file only when it validates. It is wrapped so a failure can't block the rest (see §F).
+- **Verified locally** with the whole refresh script against a mocked network:
+  - success writes the file;
+  - an HTTP 500 from the stats API keeps the previous file and still writes the schedule/players with exit 0;
+  - invalid stats rows behave the same way.
+
+  The live refresh runs in GitHub Actions.
+
+**Open (data):** How quickly the stats API reflects completed games hasn't been measured; the snapshot's `fetchedAt` is the fetch time, not a "games through" date.
+
+### Domain model and calculations (Implemented 2026-11-20, `src/domain/evaluator.ts`)
+
+The module is pure and UI-independent. It takes the saved roster (`RosterEntry[]`), a resolver (`buildPlayerLookup().resolve`) and a stats index (`buildStatsIndex(skaters)`). It never reads or writes app state, and never changes the saved roster. Tests are in `src/domain/evaluator.test.ts`.
+
+- **Statistics:**
+  - `STAT_DEFINITIONS` lists every V1 statistic with its treatment (`scaled` / `unchanged`), unit and nullability.
+  - `SCALED_STATS`: G, A, P, PPP, SHP, SOG, PIM, HIT, BLK, FOW.
+  - `UNCHANGED_STATS`: GP, +/-, S%, FO%, TOI/GP.
+- **`adjustedValue(actual, gp, benchmark)`:** returns `actual / gp * benchmark`, unrounded. It returns `null` instead of dividing when GP or the benchmark is missing, 0, negative or not a number.
+- **`classifyRoster`:** splits the roster, in roster order, into goalies and skater subjects.
+  - **Goalies:** a player whose effective, override-aware positions are all G. They are listed in `goalies` and left out of skater evaluation.
+  - **Skater statuses:**
+    - `ok`: matched by NHL id to a stats line.
+    - `no-games`: has an NHL id but no stats line, i.e. no regular-season game in the snapshot.
+    - `unmatched`: no NHL id (ESPN-only or custom player).
+    - `unknown-player`: the saved id no longer resolves.
+  - **Matching is by NHL id only, never by name.**
+  - IR players are included (they are rostered skaters) and keep `onIr`.
+  - Two saved ids that resolve to one player are listed once.
+  - Players with no positions are treated as skaters.
+- **`comparisonSubjects`:** adds external NHL skaters by NHL id, with names from the stats line. They are deduplicated. Ids already on the roster are reported in `alreadyOnRoster` and shown once, as roster players. An id with no stats gets `no-games`. Comparison players are never added to the saved roster.
+- **`resolveBenchmark`:** every available benchmark carries a `basis` (`roster-max`, `league-max`, `player`, `custom`) so the UI can say which benchmark is in use.
+  - `league-max` (the default, `DEFAULT_BENCHMARK`, since 2026-11-21): the highest GP among all skaters in the snapshot, whatever the roster (the snapshot holds skaters only, so goalies are never included). No player name: it is a league figure. Only an empty snapshot gives `available: false`, reason `no-stats`.
+  - `roster-max`: the highest GP among roster skaters with stats, IR players included; on ties, the first in roster order. Comparison players are ignored.
+  - **Roster max unavailable** (empty roster, or no rostered skater with stats): falls back to league max, `basis: 'league-max'` while `choice` stays `roster-max`, so the UI can say so.
+  - `player`: any skater's GP from the snapshot.
+  - `custom`: a whole number from 1 to `SEASON_GAMES` (84, the current season's regular-season games; the NHL season endpoint reported 84 for 20262027). Player Evaluator covers the current season only (Confirmed 2026-11-20: no historical seasons or 82-game rule); update the constant if the NHL changes its format.
+  - If the chosen player has no stats or the custom value is invalid, it returns `available: false` with a reason.
+- **`evaluateSubject` / `evaluatePlayers`:** compute adjusted counting stats per subject. They return `adjusted: null` when the subject has no stats or the benchmark is unavailable. Actual totals, GP and unchanged stats always remain available through `stats`.
+- **League-wide rankings: `rankPlayers(skaters, { stat, benchmarkGp, rosterNhlIds, minGamesPlayed, positions, direction })`.**
+  - Ranks every skater in the snapshot on one stat. `RANKING_STATS` lists the categories: every V1 stat except GP, including PIM and +/-.
+  - `minGamesPlayed` defaults to `DEFAULT_RANKING_MIN_GP` = 10; pass a lower value to include more skaters. The minimum applies to rankings only; roster evaluation includes every rostered skater whatever their GP.
+  - `positions` filters by NHL position code (C/L/R/D). `direction` is `desc` (highest first, the default) or `asc` (lowest first) for any stat: a ranking is a statistical ordering, not a claim that higher is better. Each row has its actual value, actual GP, normalized value and an `onRoster` flag for the blue-dot indicator.
+  - Uses competition ranking: ties share a rank (1, 2, 2, 4) and are listed by GP descending, then name, then id.
+  - `null` values (S% with no shots, FO% with no faceoffs) are listed last and unranked.
+  - Scaled stats require a benchmark. **The benchmark changes the displayed values but never the order**, which is actual ÷ GP.
+  - `rosterNhlIds(skaters)` supplies the roster flags.
+  - Checked against the live snapshot: a sample roster gives McDavid as the 24 GP benchmark, Makar's 23 points over 19 GP become 29.05, Larkin is `unmatched`, Shesterkin is excluded as a goalie, and Sykora is `no-games`.
+
+### Player Rankings (Confirmed 2026-11-20 as a required capability; presentation Open)
+
+- **Confirmed requirements:**
+  - Rank NHL skaters league-wide, not just the user's roster.
+  - Rank on stats normalized to the selected benchmark (default or custom).
+  - Support the available statistical categories.
+  - Keep actual GP visible next to normalized values.
+  - Mark players on the user's fantasy roster. Originally a small blue dot; **changed by the owner on 2026-11-21** to light-blue row shading in both Player Evaluator tables (no dots).
+- **Product position (Confirmed):**
+  - Rankings are an important, required part of Player Evaluator, but they are **not assumed to be its primary focus, landing view or defining feature**. Normalized rankings already exist on other fantasy sites; the value here is convenient packaging with the user's own roster highlighted.
+  - Roster evaluation remains the central concept.
+  - Navigation, prominence and presentation are left open for later product/design work.
+- **Implemented:** `rankPlayers` (above) and a first prototype UI, the League Rankings view inside the Player Evaluator tab (below).
+- **Dataset assessment for complete rankings:**
+  - **Available:** every snapshot row has a stable NHL id, full name, NHL position (C/L/R/D), team(s) and all V1 stats. That's enough to list and rank every skater who has played.
+  - **Gaps (not guessed):**
+    - **Names aren't unique.** The 2026-11-20 snapshot has two "Elias Pettersson"s, both VAN (8480012 C, 8483678 D). Identity must use `nhlId`, and the display needs a disambiguator such as position.
+    - **Blue dots require an NHL id match.** A rostered player whose directory entry has no `nhlId` (the 71 ESPN-only players at the latest snapshot) can't be flagged on the rankings, even though they appear there with stats. This is Confirmed as acceptable for now; these players are shown as unavailable in roster evaluation.
+    - **Fantasy eligibility isn't in the stats snapshot.** It only has the NHL position code; fantasy positions (LW/RW, multi-position) exist only for directory-matched players.
+    - **Team.** For the 9 traded players the snapshot lists several teams in an unverified order. The current team is only reliable from the directory.
+    - **Skaters with 0 GP** have no row, so they can't be ranked; that's correct.
+    - **No injury status** is in the snapshot.
+    - **Low-GP skaters dominate normalized rankings.** 69 of 784 have ≤ 3 GP; a 1-GP skater with 1 goal ranks first in goals per GP. Handled by the 10-GP default minimum (Confirmed, below).
+
+**Confirmed (owner decisions, 2026-11-20; Implemented as noted):**
+- **Minimum GP:** league-wide rankings default to a 10-game minimum, adjustable by the user. Rankings only: rostered players appear in roster evaluation regardless of GP. (Implemented: `DEFAULT_RANKING_MIN_GP`; the adjustable control is a UI item.)
+- **No-roster benchmark:** with no usable roster benchmark, use the highest GP among skaters in the league-wide stats dataset, and identify clearly which benchmark is in use. (Implemented: `basis: 'league-max'`.)
+- **PIM and +/-:** both are ranking categories, sortable ascending and descending. Rankings are statistical ordering, not "higher is better". (Implemented: `RANKING_STATS`, `direction`.)
+- **Position filter:** NHL position for V1; fantasy eligibility may be considered later. (Implemented: `positions`.)
+- **Custom benchmark:** whole numbers from 1 through the current season's regular-season games (84 for 2026–27). Current season only; no historical support. Kept easy to update. (Implemented: `SEASON_GAMES`.)
+- **IR players** count toward the roster-max benchmark. (Implemented.)
+- **Default benchmark changed (2026-11-21):** league max, the highest GP among all NHL skaters in the current season's stats, is the default; roster max stays selectable. Users with no saved explicit benchmark get league max; explicit choices persist across visits and both destinations. If the selected source is unavailable the fallback is shown, not hidden. (Implemented.)
+- **Persistence:** comparison players and explicitly selected benchmark settings are remembered between visits in local storage, separate from the saved fantasy roster; the default roster benchmark stays dynamic. The rankings minimum-GP selection is remembered too, also separately from the roster. (Implemented: `src/state/evaluatorPrefs.ts`, §E.)
+
+**Confirmed (owner decisions for Step 4, 2026-11-20):**
+- **Navigation:** Player Evaluator is initially a separate tab alongside the Lineup Planner tabs; the two tools stay distinct. *Revised 2026-11-21, below.*
+- **Hierarchy:** roster evaluation is the central experience. League-wide rankings are secondary: accessible, but not the landing view or defining feature.
+- **Mobile-first:** comfortable on a phone without an excessively wide table; player names stay visible; key stats easy to compare.
+- **Stats loading:** only when Player Evaluator is opened, never on startup; a stats failure must not affect the rest of the app. Show the stats update time, with a proportionate stale warning.
+- **Deliverable:** a working first prototype to test and react to, not a final design. Layout, hierarchy and interactions are expected to change after review.
+
+**Confirmed (owner's prototype revisions, 2026-11-21):**
+- **Two tool families in the navigation:** Playoff Planner (Schedules, Roster, Lineup, Trade Lab; unchanged) and Player Evaluator (Roster Evaluation, Player Rankings), visually distinguished with a restrained treatment, within one site.
+- **Two peer destinations:** Roster Evaluation and Player Rankings. The shared benchmark control (the "Player Games Normalizer") sits above both and is not a third destination.
+- **Roster Evaluation:** stat group defaults to All (order Scoring, Peripherals, Rates, All unchanged); comparison players are part of the roster table, first placed among rostered players by position, and sorted together with them; rostered rows have subtle light-blue shading, comparison rows stay white; no blue dots and no "compare" labels.
+- **Player Rankings:** the same multi-column table as Roster Evaluation (same columns, groups, normalized/actual format, column sorting, shared benchmark), with rank positions, the existing min-GP and NHL-position filters, ascending/descending order, and the same row shading. Built on the existing ranking calculation.
+
+**Confirmed (owner's second iteration, 2026-11-21):**
+- **Navigation:** Playoff Planner and Player Evaluator are two equal-level primary product areas (compact inline, restrained; no uppercase label and divider, no cards or oversized segmented controls). The selected area's destinations, and only those, appear in a compact secondary row beneath. Replaces the "two tool families" arrangement above.
+- **Player Rankings:** no Highest/Lowest control (the stat headers sort: click to sort, click again to reverse) and no summary sentence above the table.
+- **Phone layout:** don't compress spacing or type to fit more rows; check after the removals and adjust only if still needed (checked: not needed).
+- **Benchmark:** default league max; options League max, Roster max, comparison player, Custom (see above).
+- **Benchmark explanation:** keep "Normalized to N GP" prominent; the source explanation lives behind the ⓘ; no player name in the default label.
+
+### Player Evaluator prototype UI (spec Step 4; Implemented 2026-11-20, revised 2026-11-21, in the testing repo)
+
+- **Navigation (2026-11-21, second iteration; labels renamed later that day):** the sticky tab bar has two rows at every width. Row 1 (`.area-row`): the product areas **"Games Optimizer"** and **"Player Normalizer"** as two equal compact buttons (`nav.areas`, `aria-current` on the selected one, which gets the accent-soft background), with League Settings at the right of the same row. On desktop and tablets each label is one line; at ≤600px each wraps onto two lines ("Games / Optimizer", "Player / Normalizer") so both fit beside League Settings at 360px. The sub-navigations' accessible names match ("Games Optimizer", "Player Normalizer"). **Owner decisions, 2026-11-21:** these labels replace "Playoff Planner" / "Normalizer" (earlier "Player Evaluator"); "Playoff Planner" stays the website name (brand, page title, branding unchanged); "Player Evaluator" remains the feature's working name in code and docs. Row 2 (`.tabbar-row`): the selected area's destinations only, in the existing tab style and with unchanged labels: Team Schedules (`#rankings`, "Schedules" on phones), Roster, Lineup, Trade Lab; or Roster Evaluation (`#evaluator`), Player Rankings (`#player-rankings`). Choosing an area opens the destination last used in it during this visit (else its first). Tab bar height: 78px desktop, 90px phones (two-line labels). No period bar or setup line on the evaluator destinations. GA counts each destination as a tab view.
+- **One view, two destinations:** App renders a single `EvaluatorView` for both hashes, so the loaded stats and preferences carry over when switching; the benchmark bar is the same component above both.
+- **Loading:** `EvaluatorView` calls `loadSkaterStats` (with the schedule's season) when the tab first opens, once per page load (a failed request can be retried with "Try again"). The rest of the app never waits for or depends on it. Header shows "NHL stats updated <date>", or a small warning badge "Stats from <date>, may be outdated" after `STALE_AFTER_MS` (3 days, as for the schedule).
+- **Benchmark bar:** "Normalized to N GP" and an ⓘ whose first line says how the benchmark was set ("League max: the highest GP among all NHL skaters this season (N).", "Roster max: the highest GP among your rostered skaters with stats (N, name).", "Comparison player: name's GP (N).", "Custom: N GP, chosen by you.") followed by the normalization method. No permanent source sentence. Visible notes only when needed: "Roster max unavailable, using league max" (fallback) or "Choose a benchmark to see normalized stats." (no benchmark, e.g. a comparison player without stats or an invalid custom value). Benchmark select: League max (default), Roster max, each comparison player with stats, Custom… (number 1–84; out-of-range input is flagged and not saved). Removing the comparison player used as the benchmark returns it to the default, League max.
+- **Roster Evaluation table:** rostered skaters (light-blue row shading `--roster-row`, IR badge, position · team) and comparison players (white rows, ✕ to remove) in one table: GP, then the chosen stat group: Scoring (G A P PPP SHP), Peripherals (SOG HIT BLK PIM FOW), Rates (+/- S% FO% TOI) or All (default at every width; on phones the table scrolls sideways inside its panel with the name column pinned). Counting stats show the normalized value (one decimal; the full value in the cell title) with the actual total beneath it; rates show as reported. Default order (`mergeComparisons`): roster order, each comparison player after the last rostered skater with the same NHL position, else the same forward/defense group, else at the end. Column headers sort all players with stats together (desc → asc → default order, `sortRows`). Players without stats are listed last, with a one-line reason (no NHL games yet; not linked to an NHL player; not found). Excluded goalies are named under the table. Empty roster: a pointer to the Roster tab.
+- **Comparison players:** "Compare an NHL skater…" searches the stats snapshot by name (`searchSkaters`, excluding rostered and already-added skaters). Never added to the saved roster. **"Clear comparison players"** (owner request, 2026-11-21) sits beside the search box only while comparison players are shown; it removes them all (`clearComparisons` in `evaluatorPrefs.ts`, so only the preferences key changes, never the roster). If the benchmark was one of them it returns to League max, with a toast saying so; other benchmarks are kept.
+- **Player Rankings:** "All NHL skaters" in the same table format and stat groups (default All), with a pinned rank (#) and name column. Order and ranks come from `rankPlayers` on the sorted column (default Points, highest first; ties shared; unavailable values unranked "—" at the end); each row's other columns come from `evaluateSubject` with the shared benchmark. The stat headers are the only sort control: clicking one ranks on it (highest first), clicking it again flips the order (↓/↑ in the header). Filters: position (All/C/LW/RW/D, NHL position) and Min GP (persisted; default 10; an out-of-range entry shows a small "Min GP 1–84" badge beside the field). No summary line. Your rostered players get the same light-blue shading. 50 rows at a time, "Show 50 more".
+- **Team shown:** the directory's current team when the player is in it, else the snapshot's team list.
+- **Verified 2026-11-20 (local preview of the testing build, Playwright):** stats not requested on Schedules/Roster/Lineup and requested once when the tab opens; the saved roster key byte-for-byte unchanged after adding/removing comparisons, changing benchmark, sorting and using rankings; comparisons, custom benchmark and min GP restored after reload; a 500 on `skater-stats.json` shows the error while Lineup and Team Schedules keep working; no page-level horizontal scroll at 390px or 360px; Lineup works after using the evaluator.
+
+**Open (for review of the prototype):**
+- Layout, labels and copy are prototype choices (stat groups, cell format, label text).
+- Verified 2026-11-21 (local preview, Playwright): navigation families, both destinations sharing the benchmark, all 14 stat columns and the four groups in Player Rankings, comparison players merged and sorted with roster players, shading colors, roster storage unchanged, preferences restored after reload, tab bar without overflow from 360px to 1280px, and the four Playoff Planner pages pixel-identical below the tab bar to the previous build (1280/768/390/360px).
+- With All as the default on phones, the roster table needs sideways scrolling within its panel (the name column stays pinned).
+- The rankings stat selector was replaced by column-header sorting. Ranking on a stat outside the shown group is still possible (switching groups keeps the sort), but with the summary line removed the active sort is visible only while its column is shown.
+- Verified 2026-11-21 (second iteration, local preview, Playwright): product areas and their destinations at every width, League max default (25 GP on the 2026-11-20 snapshot) and Roster max / comparison player / custom values checked against `stat ÷ GP × benchmark`, the benchmark identical on both destinations and after reloads, version-1 preferences migrated, no Highest/Lowest control or summary line, header sort toggling, no overflow at 360/390/768/1040/1280px, roster storage unchanged. Player Rankings on a 390px or 360px phone: first player row at 570px (was 746px), four rows fully visible (was one), so no spacing change was made.
+- NHL position (e.g. Matthew Tkachuk listed as LW by the NHL) can differ from fantasy eligibility shown elsewhere in the app.
+- Benchmark options include comparison players only (spec §3.5); rostered players can't be picked as the benchmark.
+- Evaluator preferences don't sync between open tabs; the roster does.
+- Ranking rows for skaters on several teams show the directory team, or the snapshot's unverified team order when the player isn't in the directory.
+
+### Saved-roster integration (spec Step 3; Implemented 2026-11-20)
+
+- `evaluateSavedRoster(saved, players, statsFile, prefs)` in `src/data/evaluatorData.ts` takes the persisted app state's `roster` and `customPlayers` (the same entries the Roster tab edits; the saved roster, not a Trade Lab proposal), the bundled player directory and the stats snapshot. It resolves ids with the existing `buildPlayerLookup` (so `espn-`/`nhl-` aliases and custom players work as elsewhere), builds the stats index and calls `evaluatePlayers` with the evaluator preferences. It returns the evaluation, the stats index and roster NHL ids for rankings, the season and `fetchedAt`.
+- It only reads: no roster copy, no new roster fields, no change to `AppState`, `STORAGE_KEY` or the loaders. Roster edits flow in because it reads whatever the saved state holds.
+- `loadSkaterStats(base)` fetches and validates `skater-stats.json` separately from `loadDataset`, so a stats problem can't stop the Lineup Planner from loading. The Player Evaluator tab calls it when opened (Confirmed: not on startup).
+- **Visual/UX:** compact roster-wide table, actual and adjusted values side by side, grouped stat categories, mobile-first layout. Exact presentation and navigation remain open for prototype/review. Existing desktop Lineup Planner appearance must not regress.
+- **Seasonal priority:** deliver a useful V1 promptly while GP gaps are comparatively large. Avoid delaying core evaluation for optional features.
+- **Screenshot roster recognition is a separate high-priority workstream, not a Player Evaluator V1 dependency or release gate.** Investigate in parallel; it should improve roster entry for the whole site, especially mobile. Existing paste/manual entry and saved-roster reuse must remain sufficient to use Player Evaluator.
+- **Open:** final labels/navigation; final visual layout and presentation (the Step 4 prototype is for review); the data and decision items listed above.
+- All implementation and experiments begin in `jmaser54/fantasy-hockey-schedule-optimizer-testing` (default branch `main`). Do not change the live repository until the owner reviews and approves the tested result.
