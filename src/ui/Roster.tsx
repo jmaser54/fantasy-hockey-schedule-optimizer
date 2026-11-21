@@ -261,7 +261,7 @@ function CustomPlayerForm(props: { initialName: string; initialTeam?: string; te
 }
 
 function RosterTable() {
-  const { state, dispatch, resolve, weekWindow: week, data, teams, toast } = useApp();
+  const { state, dispatch, resolve, weekWindow: week, data, teams } = useApp();
   const rows = state.roster.map((e) => ({ e, p: resolve(e.playerId) }));
   const order = (r: { e: RosterEntry; p?: Player }) => (r.e.onIr ? 2 : r.p && effectivePositions(r.e, r.p).every((x) => x === 'G') ? 1 : 0);
   rows.sort((a, b) => order(a) - order(b));
@@ -353,20 +353,29 @@ function RosterTable() {
       <div className="panel-body small muted" style={{ borderTop: '1px solid var(--border)' }}>
         <PosBadges positions={['C', 'LW', 'RW', 'D', 'G']} /> toggles change eligibility for your league. ★ Starred players get priority in automatically optimized lineups. Manual lineup changes take precedence. IR players don’t count toward the roster limit and never play.
       </div>
-      <div className="clear-roster">
-        <button
-          className="btn small"
-          onClick={() => {
-            if (confirm(`Remove all ${state.roster.length} players from your roster? This can’t be undone. Your league settings are kept.`)) {
-              dispatch({ type: 'clearRoster' });
-              toast('Roster cleared');
-            }
-          }}
-        >
-          Clear Roster
-        </button>
-      </div>
     </section>
+  );
+}
+
+/**
+ * Clear Roster, shown at the right of the setup line at the top of the Roster tab (moved from the
+ * bottom of the roster table, 2026-11-21). Same confirmation and clearRoster action as before.
+ */
+export function ClearRosterButton() {
+  const { state, dispatch, toast } = useApp();
+  if (state.roster.length === 0) return null;
+  return (
+    <button
+      className="btn small clear-roster-btn"
+      onClick={() => {
+        if (confirm(`Remove all ${state.roster.length} players from your roster? This can’t be undone. Your league settings are kept.`)) {
+          dispatch({ type: 'clearRoster' });
+          toast('Roster cleared');
+        }
+      }}
+    >
+      Clear Roster
+    </button>
   );
 }
 

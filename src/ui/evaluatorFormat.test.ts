@@ -58,5 +58,12 @@ describe('Roster Evaluation row order', () => {
     expect(sortRows(merged, 'goals', 'desc', true).map((x) => x.id)).toEqual([2, 12, 5, 1, 10, 3, 4]);
     expect(sortRows(merged, 'goals', 'asc', true).map((x) => x.id)).toEqual([3, 10, 1, 5, 12, 2, 4]);
     expect(sortRows(merged, 'plusMinus', 'desc', false).map((x) => x.id)).toEqual([2, 12, 5, 1, 10, 3, 4]);
+    // Regular-stat sorting reads the actual total (stats) instead of the normalized value (adjusted).
+    const diverge = [
+      { ...r(1, 'C', 'roster'), stats: { nhlId: 1, position: 'C', goals: 10 } as SkaterStatLine, adjusted: { goals: 5 } },
+      { ...r(2, 'C', 'comparison'), stats: { nhlId: 2, position: 'C', goals: 4 } as SkaterStatLine, adjusted: { goals: 8 } },
+    ];
+    expect(sortRows(diverge, 'goals', 'desc', true).map((x) => x.id)).toEqual([2, 1]);
+    expect(sortRows(diverge, 'goals', 'desc', false).map((x) => x.id)).toEqual([1, 2]);
   });
 });

@@ -292,6 +292,11 @@ export interface RankingOptions {
   positions?: readonly SkaterPositionCode[];
   /** Default 'desc' (highest first); 'asc' for lowest first. */
   direction?: 'desc' | 'asc';
+  /**
+   * Which value orders and ranks the rows: the normalized value (default) or the actual,
+   * unadjusted total. Displayed values are the same either way.
+   */
+  sortBy?: 'normalized' | 'actual';
 }
 
 export interface RankedPlayer {
@@ -336,14 +341,17 @@ export function rankPlayers(skaters: readonly SkaterStatLine[], opts: RankingOpt
         onRoster: opts.rosterNhlIds?.has(s.nhlId) ?? false,
       };
     });
+  const key = (r: RankedPlayer) => (opts.sortBy === 'actual' ? r.actual : r.value);
   rows.sort((a, b) => {
-    if (a.value === null || b.value === null) return a.value === b.value ? tieOrder(a, b) : a.value === null ? 1 : -1;
-    return a.value !== b.value ? sign * (a.value - b.value) : tieOrder(a, b);
+    const x = key(a);
+    const y = key(b);
+    if (x === null || y === null) return x === y ? tieOrder(a, b) : x === null ? 1 : -1;
+    return x !== y ? sign * (x - y) : tieOrder(a, b);
   });
   let prev: number | null = null;
   rows.forEach((r, i) => {
-    if (r.value === null) return;
-    r.rank = prev !== null && rows[i - 1]!.value === r.value ? prev : i + 1;
+    if (key(r) === null) return;
+    r.rank = prev !== null && key(rows[i - 1]!) === key(r) ? prev : i + 1;
     prev = r.rank;
   });
   return rows;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SkaterPositionCode, SkaterStatLine, SkaterStatsFile } from '../data/format.ts';
 import { evaluateSavedRoster, loadSkaterStats } from '../data/evaluatorData.ts';
 import { STALE_AFTER_MS } from '../data/load.ts';
@@ -75,6 +75,8 @@ export function EvaluatorView({ page, onGoRoster }: { page: EvaluatorPage; onGoR
 function Evaluator({ file, page, onGoRoster }: { file: SkaterStatsFile; page: EvaluatorPage; onGoRoster: () => void }) {
   const { state, data, toast } = useApp();
   const [prefs, setPrefs] = useState<EvaluatorPrefs>(loadEvaluatorPrefs);
+  // Which value the column headers sort by; shared by both destinations for this visit (not saved).
+  const [sortBasis, setSortBasis] = useState<SortBasis>('normalized');
   useEffect(() => {
     saveEvaluatorPrefs(prefs);
   }, [prefs]);
@@ -131,6 +133,8 @@ function Evaluator({ file, page, onGoRoster }: { file: SkaterStatsFile; page: Ev
             emptyRoster={state.roster.length === 0}
             onGoRoster={onGoRoster}
             goalies={result.evaluation.goalies.map((g) => g.name)}
+            sortBasis={sortBasis}
+            onSortBasis={setSortBasis}
             footer={
               <div className="ev-cmp-row">
                 <ComparisonSearch skaters={file.skaters} exclude={new Set([...result.rosterNhlIds, ...prefs.comparisons])} teamOf={teamOf} onAdd={addComparison} />
@@ -150,6 +154,8 @@ function Evaluator({ file, page, onGoRoster }: { file: SkaterStatsFile; page: Ev
           minGamesPlayed={prefs.minGamesPlayed}
           onMinGamesPlayed={(minGamesPlayed) => setPrefs((p) => ({ ...p, minGamesPlayed }))}
           teamOf={teamOf}
+          sortBasis={sortBasis}
+          onSortBasis={setSortBasis}
         />
       )}
     </div>
@@ -302,6 +308,78 @@ function StatGroupToggle({ group, onChange }: { group: StatGroupId; onChange: (g
   );
 }
 
+/** Which value a stat column sorts by. The cells always show normalized (bold) over actual. */
+type SortBasis = 'normalized' | 'actual';
+const SORT_BASES: { id: SortBasis; label: string }[] = [
+  { id: 'normalized', label: 'Normalized Stats' },
+  { id: 'actual', label: 'Regular Stats' },
+];
+
+/** Compact dropdown beside the stat groups: chooses the sort basis only. */
+function SortBasisMenu({ value, onChange }: { value: SortBasis; onChange: (v: SortBasis) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('touchstart', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('touchstart', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+  const label = SORT_BASES.find((b) => b.id === value)!.label;
+  return (
+    <div className="sort-basis" ref={ref}>
+      <span className="sort-basis-label" aria-hidden="true">
+        Sort by:
+      </span>
+      <button
+        type="button"
+        className="sort-basis-btn"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Sort columns by: ${label}`}
+        title="Which values the column headers sort by"
+        onClick={() => setOpen((o) => !o)}
+      >
+        {label}
+        <svg className="sort-basis-caret" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+          <path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <div className="sort-basis-menu" role="menu" aria-label="Sort columns by">
+          {SORT_BASES.map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              role="menuitemradio"
+              aria-checked={b.id === value}
+              className="sort-basis-item"
+              onClick={() => {
+                onChange(b.id);
+                setOpen(false);
+              }}
+            >
+              <span className="sort-basis-check" aria-hidden="true">
+                {b.id === value ? '✓' : ''}
+              </span>
+              {b.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RosterPanel(props: {
   roster: EvaluatedSubject[];
   comparisons: EvaluatedSubject[];
@@ -312,6 +390,8 @@ function RosterPanel(props: {
   onGoRoster: () => void;
   goalies: string[];
   footer: React.ReactNode;
+  sortBasis: SortBasis;
+  onSortBasis: (v: SortBasis) => void;
 }) {
   const [group, setGroup] = useState<StatGroupId>('all');
   const [sort, setSort] = useState<SortState>(null);
@@ -320,7 +400,7 @@ function RosterPanel(props: {
   const onSort = (key: StatKey) => setSort((s) => (s?.key === key ? (s.dir === 'desc' ? { key, dir: 'asc' } : null) : { key, dir: 'desc' }));
   // Comparison players sit among rostered players by position, and join the same sort.
   const merged = mergeComparisons(props.roster, props.comparisons);
-  const rows = sort ? sortRows(merged, sort.key, sort.dir, isScaledStat(sort.key)) : merged;
+  const rows = sort ? sortRows(merged, sort.key, sort.dir, props.sortBasis === 'normalized' && isScaledStat(sort.key)) : merged;
 
   const row = (s: EvaluatedSubject) => {
     const kind = s.source;
@@ -361,6 +441,7 @@ function RosterPanel(props: {
     <div className="panel">
       <div className="panel-head">
         <h2>Your roster</h2>
+        <SortBasisMenu value={props.sortBasis} onChange={props.onSortBasis} />
         <StatGroupToggle group={group} onChange={setGroup} />
       </div>
       {props.emptyRoster ? (
@@ -487,6 +568,8 @@ function RankingsPanel(props: {
   minGamesPlayed: number;
   onMinGamesPlayed: (n: number) => void;
   teamOf: (nhlId: number, line?: SkaterStatLine) => string;
+  sortBasis: SortBasis;
+  onSortBasis: (v: SortBasis) => void;
 }) {
   const [group, setGroup] = useState<StatGroupId>('all');
   const [stat, setStat] = useState<StatKey>('points');
@@ -520,16 +603,18 @@ function RankingsPanel(props: {
             minGamesPlayed: props.minGamesPlayed,
             positions: position === 'all' ? undefined : [position],
             direction,
+            sortBy: props.sortBasis,
           })
         : [],
-    [canRank, props.skaters, stat, bm, props.rosterNhlIds, props.minGamesPlayed, position, direction],
+    [canRank, props.skaters, stat, bm, props.rosterNhlIds, props.minGamesPlayed, position, direction, props.sortBasis],
   );
-  useEffect(() => setShown(PAGE), [stat, position, direction, props.minGamesPlayed]);
+  useEffect(() => setShown(PAGE), [stat, position, direction, props.minGamesPlayed, props.sortBasis]);
 
   return (
     <div className="panel">
       <div className="panel-head">
         <h2>All NHL skaters</h2>
+        <SortBasisMenu value={props.sortBasis} onChange={props.onSortBasis} />
         <StatGroupToggle group={group} onChange={setGroup} />
       </div>
       <div className="panel-body rank-controls">

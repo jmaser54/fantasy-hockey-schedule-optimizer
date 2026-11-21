@@ -317,6 +317,21 @@ describe('rankPlayers', () => {
     ]);
   });
 
+  it('can order and rank by the actual value instead of the normalized one, with the same displayed values', () => {
+    const r = rankPlayers(league, { stat: 'goals', benchmarkGp: 20, minGamesPlayed: 1, sortBy: 'actual' });
+    expect(r.map((x) => [x.rank, x.name, x.actual, x.value])).toEqual([
+      [1, 'Ten', 10, 10],
+      [2, 'Eleven', 6, 12],
+      [3, 'Twelve', 2, 8],
+      [3, 'Thirteen', 2, 10],
+      [5, 'Fourteen', 1, 20],
+    ]);
+    expect(rankPlayers(league, { stat: 'goals', benchmarkGp: 20, minGamesPlayed: 1, sortBy: 'actual', direction: 'asc' })[0]!.name).toBe('Fourteen');
+    expect(rankPlayers(league, { stat: 'goals', benchmarkGp: 20, minGamesPlayed: 1, sortBy: 'normalized' })).toEqual(rankPlayers(league, { stat: 'goals', benchmarkGp: 20, minGamesPlayed: 1 }));
+    // Unchanged stats are the same either way; unavailable values stay last and unranked.
+    expect(rankPlayers(league, { stat: 'shootingPct', minGamesPlayed: 1, sortBy: 'actual' })).toEqual(rankPlayers(league, { stat: 'shootingPct', minGamesPlayed: 1 }));
+  });
+
   it('requires a benchmark for scaled stats', () => {
     expect(() => rankPlayers(league, { stat: 'points' })).toThrow(/benchmarkGp/);
     expect(() => rankPlayers(league, { stat: 'points', benchmarkGp: 0 })).toThrow(/benchmarkGp/);
