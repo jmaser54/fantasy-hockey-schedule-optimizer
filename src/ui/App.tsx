@@ -14,7 +14,7 @@ import { EvaluatorView } from './Evaluator.tsx';
 import { ContactForm } from './Contact.tsx';
 import { LineupView } from './Lineup.tsx';
 import { RankingsView } from './Rankings.tsx';
-import { ClearRosterButton, RosterView } from './Roster.tsx';
+import { RosterView } from './Roster.tsx';
 import { SettingsModal } from './Settings.tsx';
 import { TradesView } from './Trades.tsx';
 
@@ -200,7 +200,7 @@ export function App() {
             toast={toast}
             periodBar={!about && !isEvaluatorTab(tab)}
             showModes={tab !== 'roster'}
-            setupExtra={!about && tab === 'roster' ? <ClearRosterButton /> : undefined}
+            setupInPage={!about && tab === 'roster'}
             onOpenSettings={() => setSettingsOpen(true)}
             overlay={settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
           >
@@ -302,8 +302,8 @@ function Ready(props: {
   periodBar: boolean;
   /** False on Roster: no period toggle there (its Games column always shows next week). */
   showModes: boolean;
-  /** Shown at the right of the setup line (Roster: Clear Roster). */
-  setupExtra?: React.ReactNode;
+  /** The page shows the setup line itself (Roster: under its heading row), so it isn't rendered above. */
+  setupInPage?: boolean;
   onOpenSettings: () => void;
   overlay: React.ReactNode;
   children: React.ReactNode;
@@ -401,20 +401,13 @@ function Ready(props: {
     days,
     summarizeWindow,
     toast,
+    setupLine: props.periodBar && props.setupInPage ? <SetupLine mode={mode} hasWindow={!!selected} onOpen={props.onOpenSettings} /> : undefined,
   };
   const controls: PeriodControls = { mode, setMode, customPeriods, setCustomPeriods, customTotal, setCustomTotal };
   return (
     <Ctx.Provider value={ctx}>
       {props.periodBar && props.showModes && <PeriodBar {...controls} hasWindow={!!selected} />}
-      {props.periodBar &&
-        (props.setupExtra ? (
-          <div className="setup-row">
-            <SetupLine mode={mode} hasWindow={!!selected} onOpen={props.onOpenSettings} />
-            {props.setupExtra}
-          </div>
-        ) : (
-          <SetupLine mode={mode} hasWindow={!!selected} onOpen={props.onOpenSettings} />
-        ))}
+      {props.periodBar && !props.setupInPage && <SetupLine mode={mode} hasWindow={!!selected} onOpen={props.onOpenSettings} />}
       {props.periodBar && props.showModes && !selected ? <div className="empty">Enter a start and end date for your period above.</div> : props.children}
       {props.overlay}
     </Ctx.Provider>

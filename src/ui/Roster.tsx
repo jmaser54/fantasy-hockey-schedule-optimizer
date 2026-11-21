@@ -17,7 +17,7 @@ interface ReviewLine {
 }
 
 export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
-  const { state, dispatch, resolve, toast } = useApp();
+  const { state, dispatch, resolve, toast, setupLine } = useApp();
   const [mode, setMode] = useState<'paste' | 'search'>('paste');
   const [review, setReview] = useState<ReviewLine[] | null>(null);
   const onRoster = useMemo(() => new Set(state.roster.map((e) => e.playerId)), [state.roster]);
@@ -43,7 +43,7 @@ export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
   return (
     <div className="stack">
       <section className="panel">
-        <div className="panel-head">
+        <div className="panel-head roster-head">
           <h2>Roster</h2>
           <span className="counts">
             <span>
@@ -58,8 +58,11 @@ export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
               View Lineup →
             </button>
           )}
+          <span className="head-break" aria-hidden="true" />
+          <ClearRosterButton />
         </div>
         <div className="panel-body stack">
+          {setupLine && <div className="roster-setup">{setupLine}</div>}
           <div className="mode-switch" role="tablist" aria-label="Add players">
             <button role="tab" aria-selected={mode === 'paste'} onClick={() => setMode('paste')}>
               Paste Roster
@@ -129,7 +132,7 @@ function PasteBox({ onParsed }: { onParsed: (lines: ReviewLine[]) => void }) {
   };
   return (
     <div className="stack" style={{ gap: 8 }}>
-      <p className="paste-hint">Paste your fantasy roster below to automatically identify the player names.</p>
+      <p className="paste-hint">Paste your roster to automatically identify players</p>
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -358,15 +361,16 @@ function RosterTable() {
 }
 
 /**
- * Clear Roster, shown at the right of the setup line at the top of the Roster tab (moved from the
- * bottom of the roster table, 2026-11-21). Same confirmation and clearRoster action as before.
+ * Clear Roster, a restrained red text button at the far right of the Roster heading row (owner
+ * request, 2026-11-21). Same confirmation and clearRoster action as before.
  */
-export function ClearRosterButton() {
+function ClearRosterButton() {
   const { state, dispatch, toast } = useApp();
   if (state.roster.length === 0) return null;
   return (
     <button
-      className="btn small clear-roster-btn"
+      type="button"
+      className="clear-roster-btn"
       onClick={() => {
         if (confirm(`Remove all ${state.roster.length} players from your roster? This can’t be undone. Your league settings are kept.`)) {
           dispatch({ type: 'clearRoster' });
