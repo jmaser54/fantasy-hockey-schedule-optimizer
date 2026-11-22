@@ -19,7 +19,7 @@ import type { Player } from '../domain/types.ts';
 import { clearComparisons, loadEvaluatorPrefs, saveEvaluatorPrefs, type EvaluatorPrefs } from '../state/evaluatorPrefs.ts';
 import { useApp } from './context.ts';
 import { InfoTip } from './common.tsx';
-import { formatAdjusted, formatStat, mergeComparisons, POSITION_SHORT, searchSkaters, sortRows, STAT_GROUPS, STAT_SHORT, type StatGroupId } from './evaluatorFormat.ts';
+import { adjustedDecimals, formatAdjusted, formatStat, mergeComparisons, POSITION_SHORT, searchSkaters, sortRows, STAT_GROUPS, STAT_SHORT, type StatGroupId } from './evaluatorFormat.ts';
 
 /**
  * Player Evaluator (first functional prototype). Reads the saved roster, never changes it, and keeps
@@ -173,6 +173,8 @@ function benchmarkSource(b: Benchmark): string {
       return b.choice.kind === 'roster-max'
         ? `Roster max isn’t available because none of your rostered skaters have stats yet, so league max is used: the highest GP among all NHL skaters this season (${b.gamesPlayed}).`
         : `League max: the highest GP among all NHL skaters this season (${b.gamesPlayed}).`;
+    case 'per-game':
+      return 'Per Game: each counting stat per game played (benchmark 1 GP).';
     case 'roster-max':
       return `Roster max: the highest GP among your rostered skaters with stats (${b.gamesPlayed}${b.name ? `, ${b.name}` : ''}).`;
     case 'player':
@@ -194,7 +196,7 @@ function BenchmarkBar(props: { benchmark: Benchmark; choice: BenchmarkChoice; co
   const draftValid = /^\d+$/.test(draft) && draftNum >= 1 && draftNum <= SEASON_GAMES;
 
   const select = (v: string) => {
-    if (v === 'league-max' || v === 'roster-max') onChange({ kind: v });
+    if (v === 'league-max' || v === 'roster-max' || v === 'per-game') onChange({ kind: v });
     else if (v === 'custom') onChange({ kind: 'custom', gamesPlayed: benchmark.available ? benchmark.gamesPlayed : SEASON_GAMES });
     else onChange({ kind: 'player', nhlId: Number(v.slice(2)) });
   };
@@ -231,6 +233,7 @@ function BenchmarkBar(props: { benchmark: Benchmark; choice: BenchmarkChoice; co
         <select id="bench-select" value={value} onChange={(e) => select(e.target.value)}>
           <option value="league-max">League max</option>
           <option value="roster-max">Roster max</option>
+          <option value="per-game">Per Game</option>
           {players.map((p) => (
             <option key={p.nhlId} value={`p:${p.nhlId}`}>
               {p.name} ({p.stats!.gamesPlayed} GP)
@@ -394,6 +397,7 @@ function RosterPanel(props: {
   onSortBasis: (v: SortBasis) => void;
 }) {
   const [group, setGroup] = useState<StatGroupId>('all');
+  const decimals = adjustedDecimals(props.benchmark.available ? props.benchmark.basis : undefined);
   const [sort, setSort] = useState<SortState>(null);
   const stats = STAT_GROUPS.find((g) => g.id === group)!.stats;
   const cols = stats.length + 2;
@@ -425,7 +429,7 @@ function RosterPanel(props: {
           <>
             <td className="n">{s.stats.gamesPlayed}</td>
             {stats.map((k) => (
-              <StatCell key={k} subject={s} stat={k} />
+              <StatCell key={k} subject={s} stat={k} decimals={decimals} />
             ))}
           </>
         ) : (
@@ -473,7 +477,7 @@ function RosterPanel(props: {
       <div className="eval-foot">
         {props.footer}
         <p className="small muted ev-legend">
-          <b className="num">12.3</b> normalized to {props.benchmark.available ? `${props.benchmark.gamesPlayed} GP` : 'the benchmark'} · <span className="num">10</span> actual
+          <b className="num">{formatAdjusted(decimals === 3 ? 0.875 : 12.34, decimals)}</b> normalized to {props.benchmark.available ? `${props.benchmark.gamesPlayed} GP` : 'the benchmark'} · <span className="num">10</span> actual
           {props.goalies.length > 0 && (
             <>
               <br />
@@ -486,13 +490,13 @@ function RosterPanel(props: {
   );
 }
 
-function StatCell({ subject, stat }: { subject: EvaluatedSubject; stat: StatKey }) {
+function StatCell({ subject, stat, decimals }: { subject: EvaluatedSubject; stat: StatKey; decimals: number }) {
   const s = subject.stats!;
   if (!isScaledStat(stat)) return <td className="n">{formatStat(stat, s[stat])}</td>;
   const adj = subject.adjusted?.[stat];
   return (
     <td className="n ev-cell" title={adj !== undefined ? `${LABEL.get(stat)}: ${s[stat]} in ${s.gamesPlayed} GP → ${adj.toFixed(3)}` : undefined}>
-      <b>{adj !== undefined ? formatAdjusted(adj) : '—'}</b>
+      <b>{adj !== undefined ? formatAdjusted(adj, decimals) : '—'}</b>
       <span className="ev-actual">{s[stat]}</span>
     </td>
   );
@@ -572,6 +576,7 @@ function RankingsPanel(props: {
   onSortBasis: (v: SortBasis) => void;
 }) {
   const [group, setGroup] = useState<StatGroupId>('all');
+  const decimals = adjustedDecimals(props.benchmark.available ? props.benchmark.basis : undefined);
   const [stat, setStat] = useState<StatKey>('points');
   const [position, setPosition] = useState<'all' | SkaterPositionCode>('all');
   const [direction, setDirection] = useState<'desc' | 'asc'>('desc');
@@ -680,7 +685,7 @@ function RankingsPanel(props: {
                       </th>
                       <td className="n">{r.gamesPlayed}</td>
                       {stats.map((k) => (
-                        <StatCell key={k} subject={subject} stat={k} />
+                        <StatCell key={k} subject={subject} stat={k} decimals={decimals} />
                       ))}
                     </tr>
                   );

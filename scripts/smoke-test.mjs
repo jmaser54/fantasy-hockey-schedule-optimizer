@@ -106,6 +106,14 @@ try {
 
   await page.getByRole('tab', { name: /^Roster(\s*\d+)?$/ }).click();
   if (!(await page.getByLabel('Paste player names').isVisible())) fail('paste mode is not the default on the roster page');
+  // Upload Image: the panel opens and the self-hosted OCR engine files are served (OCR itself isn't run here).
+  await page.getByRole('tab', { name: 'Upload Image' }).click();
+  if (!(await page.getByRole('button', { name: 'Choose Screenshots' }).isVisible())) fail('Upload Image panel did not open');
+  for (const f of ['worker.min.js', 'eng.traineddata.gz', 'tesseract-core-simd-lstm.wasm.js']) {
+    const res = await fetch(new URL(`ocr/${f}`, base), { method: 'HEAD' });
+    if (!res.ok) fail(`OCR file ocr/${f} not served (HTTP ${res.status})`);
+  }
+  console.log('upload image OK: panel opens, OCR engine files served');
   await page.getByRole('tab', { name: 'Search Players' }).click();
   await page.getByLabel('Search players').fill('Connor McDavid');
   await page.locator('.suggest li').first().click();

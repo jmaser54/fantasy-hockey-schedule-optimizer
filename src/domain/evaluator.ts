@@ -167,7 +167,12 @@ export function rosterNhlIds(skaters: readonly Subject[]): Set<number> {
 // ---------------------------------------------------------------------------
 // Benchmark
 
-export type BenchmarkChoice = { kind: 'league-max' } | { kind: 'roster-max' } | { kind: 'player'; nhlId: number } | { kind: 'custom'; gamesPlayed: number };
+export type BenchmarkChoice =
+  | { kind: 'league-max' }
+  | { kind: 'roster-max' }
+  | { kind: 'per-game' }
+  | { kind: 'player'; nhlId: number }
+  | { kind: 'custom'; gamesPlayed: number };
 
 /** The default benchmark: the highest GP among all skaters in the season's stats (owner decision, 2026-11-21). */
 export const DEFAULT_BENCHMARK: BenchmarkChoice = { kind: 'league-max' };
@@ -177,7 +182,7 @@ export const DEFAULT_BENCHMARK: BenchmarkChoice = { kind: 'league-max' };
  * and the fallback for roster-max when no rostered skater has stats), the roster's highest GP, a
  * chosen player, or a custom value.
  */
-export type BenchmarkBasis = 'roster-max' | 'league-max' | 'player' | 'custom';
+export type BenchmarkBasis = 'roster-max' | 'league-max' | 'per-game' | 'player' | 'custom';
 
 export type Benchmark =
   | { available: true; gamesPlayed: number; choice: BenchmarkChoice; basis: BenchmarkBasis; /** Who set it (roster-max / player). */ nhlId?: number; name?: string }
@@ -197,6 +202,8 @@ export const SEASON_GAMES = 84;
  * GP. Custom: a whole number from 1 to SEASON_GAMES.
  */
 export function resolveBenchmark(choice: BenchmarkChoice, rosterSkaters: readonly Subject[], stats: StatsIndex): Benchmark {
+  // Per Game: a built-in 1 GP benchmark, i.e. each counting stat per game played.
+  if (choice.kind === 'per-game') return { available: true, gamesPlayed: 1, choice, basis: 'per-game' };
   if (choice.kind === 'custom') {
     const gp = choice.gamesPlayed;
     return Number.isInteger(gp) && gp >= 1 && gp <= SEASON_GAMES

@@ -33,8 +33,13 @@ STAT_GROUPS.push({ id: 'all', label: 'All', stats: STAT_GROUPS.flatMap((g) => g.
 /** NHL position code as shown to fantasy managers. */
 export const POSITION_SHORT: Record<SkaterPositionCode, string> = { C: 'C', L: 'LW', R: 'RW', D: 'D' };
 
-/** Normalized counting stats keep one decimal (the full value is in the cell's title). */
-export const formatAdjusted = (v: number): string => v.toFixed(1);
+/**
+ * Normalized counting stats: two decimals, or three for the Per Game benchmark, trailing zeros kept
+ * (8.80, 0.900). Display only: sorting and ranking use the full values; the full value is in the title.
+ */
+export const formatAdjusted = (v: number, decimals = 2): string => v.toFixed(decimals);
+/** Decimal places for normalized values under a benchmark basis. */
+export const adjustedDecimals = (basis: string | undefined): number => (basis === 'per-game' ? 3 : 2);
 
 /** A reported value: counts as integers, +/- signed, percentages to one decimal, TOI as m:ss. */
 export function formatStat(key: StatKey, v: number | null): string {

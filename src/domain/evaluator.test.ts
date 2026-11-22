@@ -156,6 +156,14 @@ describe('resolveBenchmark', () => {
     expect(e.roster[0]!.adjusted!.goals).toBe(12.5); // 5 / 10 * 25
   });
 
+  it('Per Game is a built-in 1 GP benchmark: each counting stat per game played', () => {
+    expect(resolveBenchmark({ kind: 'per-game' }, skaters, stats)).toEqual({ available: true, gamesPlayed: 1, choice: { kind: 'per-game' }, basis: 'per-game' });
+    const e = evaluatePlayers({ roster: [entry('nhl-2')], resolve, stats: buildStatsIndex([line(2, 8, { goals: 7, assists: 9, points: 16 })]), benchmark: { kind: 'per-game' } });
+    expect(e.benchmark).toMatchObject({ gamesPlayed: 1, basis: 'per-game' });
+    expect(e.roster[0]!.adjusted).toMatchObject({ goals: 0.875, assists: 1.125, points: 2 }); // 7 / 8 × 1, 9 / 8 × 1, 16 / 8 × 1
+    expect(e.roster[0]!.stats).toMatchObject({ goals: 7, gamesPlayed: 8 }); // actual values untouched
+  });
+
   it('roster max is the highest GP among roster skaters with stats (first in roster order on ties)', () => {
     expect(resolveBenchmark({ kind: 'roster-max' }, skaters, stats)).toMatchObject({ available: true, gamesPlayed: 20, nhlId: 1, name: 'Alpha', basis: 'roster-max' });
   });

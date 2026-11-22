@@ -41,6 +41,7 @@ function loadBenchmark(v: unknown): BenchmarkChoice | undefined {
   if (!isObj(v)) return undefined;
   if (v.kind === 'league-max') return { kind: 'league-max' };
   if (v.kind === 'roster-max') return { kind: 'roster-max' };
+  if (v.kind === 'per-game') return { kind: 'per-game' };
   if (v.kind === 'player' && isId(v.nhlId)) return { kind: 'player', nhlId: v.nhlId };
   if (v.kind === 'custom' && Number.isInteger(v.gamesPlayed) && (v.gamesPlayed as number) >= 1) return { kind: 'custom', gamesPlayed: v.gamesPlayed as number };
   return undefined;

@@ -102,19 +102,19 @@ main { max-width: 1200px; margin: 0 auto; padding: 16px; }
 .setup-line { display: block; margin: -8px 0 14px; padding: 0; border: 0; background: none; font: inherit; font-size: 12px; color: var(--muted); text-align: left; cursor: pointer; }
 .setup-line:hover { color: var(--accent); text-decoration: underline; }
 /* Roster tab: setup line on the left, Clear Roster on the right; wraps on narrow screens. */
-/* Roster tab: Clear Roster at the far right of the heading row; the setup line sits just below it. */
-.clear-roster-btn { border: 0; background: none; padding: 4px 6px; margin-right: -6px; border-radius: 6px; color: var(--bad); font-size: 13px; font-weight: 600; white-space: nowrap; }
-.clear-roster-btn:hover { background: var(--bad-soft); }
-.roster-head .head-break { display: none; }
-.roster-setup { margin-top: -6px; }
+/* Roster tab, one spacing rhythm: summary 8px under the heading row, 10px to the Paste/Search toggle,
+   8px to Clear Roster (left, under the toggle), 12px to the paste or search content. */
+.panel-body.roster-body { gap: 12px; padding-top: 8px; }
+.roster-setup { margin-bottom: -2px; }
 .roster-setup .setup-line { margin: 0; }
-@media (max-width: 600px) {
-  /* Phones: "Roster" and Clear Roster share the first line; counts and View Lineup wrap beneath. */
-  .roster-head .clear-roster-btn { order: 1; }
-  .roster-head .head-break { display: block; order: 2; flex-basis: 100%; height: 0; }
-  .roster-head .counts { order: 3; }
-  .roster-head > .btn { order: 4; }
+.clear-roster-row { display: flex; justify-content: flex-start; margin-top: -4px; }
+.clear-roster-btn {
+  padding: 4px 10px; border: 1px solid color-mix(in srgb, var(--bad) 40%, transparent); border-radius: 8px;
+  background: var(--surface); color: var(--bad); font-size: 13px; font-weight: 600; white-space: nowrap;
 }
+.clear-roster-btn:hover { background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 60%, transparent); }
+.clear-roster-btn:focus-visible { outline: 2px solid color-mix(in srgb, var(--bad) 50%, transparent); outline-offset: 2px; }
+
 .roster-pill {
   justify-self: start; display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px; border-radius: 999px;
   border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
@@ -298,6 +298,18 @@ th.col-selected { box-shadow: inset 0 -2px 0 var(--accent); }
 .mode-switch button { border: 1px solid transparent; background: none; border-radius: 7px; padding: 8px 12px; font-weight: 700; color: var(--muted); }
 .mode-switch button[aria-selected='true'] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 .paste-hint { margin: 0; font-size: 12px; color: var(--muted); }
+/* Roster input: three equal modes (Paste Roster, Upload Image, Search Players). */
+.mode-switch.modes-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.mode-switch.modes-3 button { line-height: 1.2; }
+.mode-switch.modes-3 .mode-word { display: block; }
+.shots { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.shots li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 4px 4px 4px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.shot-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.shot-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.bad-text { color: var(--bad); }
+.import-extra { padding: 8px 14px 10px; border-top: 1px solid var(--border); }
+.import-extra summary { cursor: pointer; }
+.import-extra .review { margin-top: 6px; }
 .add-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
 .search { position: relative; flex: 1 1 280px; }
 .search input, textarea, .field input, .field select {
@@ -393,6 +405,10 @@ h3 { font-size: 13px; margin: 16px 0 6px; }
   .tab .label-full { display: none; }
   .tab .label-short { display: inline; }
   .tab .count { margin-left: 3px; }
+  .mode-switch.modes-3 button { padding: 8px 4px; }
+  /* Import review on phones: the choices go on their own full-width line under the name. */
+  .review-row { grid-template-columns: 22px minmax(0, 1fr); }
+  .review-row .opts { grid-column: 2 / -1; }
 
   .roster-table thead { display: none; }
   .roster-table tbody tr:not(.missing) {
@@ -413,6 +429,7 @@ h3 { font-size: 13px; margin: 16px 0 6px; }
 @media (pointer: coarse) {
   .area { min-height: 40px; }
   .sort-basis-btn, .sort-basis-item { min-height: 36px; }
+  .clear-roster-btn { min-height: 36px; }
   .star, .info-btn { position: relative; }
   .star::after, .info-btn::after { content: ''; position: absolute; inset: -12px; }
   .icon-btn { min-width: 40px; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; }

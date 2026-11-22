@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SkaterStatLine } from '../data/format.ts';
 import { RANKING_STATS, SCALED_STATS, UNCHANGED_STATS } from '../domain/evaluator.ts';
-import { formatAdjusted, formatStat, mergeComparisons, searchSkaters, sortRows, STAT_GROUPS, STAT_SHORT } from './evaluatorFormat.ts';
+import { adjustedDecimals, formatAdjusted, formatStat, mergeComparisons, searchSkaters, sortRows, STAT_GROUPS, STAT_SHORT } from './evaluatorFormat.ts';
 
 const s = (nhlId: number, name: string, gamesPlayed: number) => ({ nhlId, name, gamesPlayed }) as SkaterStatLine;
 
@@ -14,7 +14,16 @@ describe('Player Evaluator formatting', () => {
   });
 
   it('formats values by kind', () => {
-    expect(formatAdjusted(12.345)).toBe('12.3');
+    expect(formatAdjusted(12.3456)).toBe('12.35');
+    // Per Game shows three decimals, every other benchmark two; trailing zeros kept.
+    expect([adjustedDecimals('per-game'), adjustedDecimals('league-max'), adjustedDecimals('roster-max'), adjustedDecimals('custom'), adjustedDecimals('player'), adjustedDecimals(undefined)]).toEqual([3, 2, 2, 2, 2, 2]);
+    expect(formatAdjusted(8.8, 2)).toBe('8.80');
+    expect(formatAdjusted(0, 2)).toBe('0.00');
+    expect(formatAdjusted(22.4166, 2)).toBe('22.42');
+    expect(formatAdjusted(0.875, 3)).toBe('0.875');
+    expect(formatAdjusted(0.9, 3)).toBe('0.900');
+    expect(formatAdjusted(0, 3)).toBe('0.000');
+    expect(formatAdjusted(1.23456, 3)).toBe('1.235');
     expect(formatStat('shootingPct', 0.1534)).toBe('15.3%');
     expect(formatStat('faceoffWinPct', null)).toBe('—');
     expect(formatStat('toiPerGame', 1411.6)).toBe('23:32');

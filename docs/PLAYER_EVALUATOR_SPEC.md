@@ -79,7 +79,7 @@ Plus/minus is intentionally static in V1. Although it can be mathematically mult
 Do not assume every field belongs in a scaled or unchanged category without checking its definition. Document the treatment of every displayed statistic.
 
 ### 3.5 Benchmark controls and external comparisons
-- **Benchmark options (Confirmed 2026-11-21), in this order:** League max (the default: highest GP among all NHL skaters in the current season's stats; skaters only), Roster max (highest GP among the user's rostered skaters with valid stats, **including skaters on IR**), a comparison player's GP, or a custom whole number.
+- **Benchmark options (Confirmed 2026-11-21), in this order:** League max (the default: highest GP among all NHL skaters in the current season's stats; skaters only), Roster max (highest GP among the user's rostered skaters with valid stats, **including skaters on IR**), **Per Game** (a built-in 1 GP benchmark, added 2026-11-21: each counting stat per game played), a comparison player's GP, or a custom whole number. The dropdown order is League max, Roster max, Per Game, (comparison players), Custom. Normalized values show three decimals under Per Game and two decimals under every other benchmark (League max, Roster max, Custom, comparison player), trailing zeros kept (e.g. 0.900, 8.80); display only, calculations, sorting and ranking use full precision.
 - **Roster max unavailable** (no roster, or no rostered skater with stats): use league max and say so (Confirmed 2026-11-20).
 - An explicitly selected benchmark is remembered across visits and both Player Evaluator destinations; users with no saved explicit choice get League max.
 - Allow the user to search for and add one or more NHL skaters who are not on their fantasy roster to the analysis. These are comparison players, not additions to the saved fantasy roster.
@@ -156,6 +156,8 @@ It is nevertheless a high-priority improvement to the overall Playoff Planner be
 - The user should be able to review and correct recognized names before adding them; ambiguous matches must never be guessed.
 - If implementation or quality testing takes longer than expected, release Player Evaluator without screenshot recognition and continue that work separately.
 - Do not add a dependency on screenshot recognition to saved-roster reuse, manual entry, or pasted roster import.
+
+**V1 implemented in the testing repo (2026-11-21, not live):** an Upload Image roster input beside Paste Roster and Search Players, reading screenshots on the device with Tesseract.js and importing through the same path as pasted text (exact players added at once; only same-name players and near matches reviewed). Details, measurements and open items: `docs/PROJECT_SOURCE_OF_TRUTH.md` §B ("Roster input") and §I.
 
 ## 7. Existing implementation to reuse
 

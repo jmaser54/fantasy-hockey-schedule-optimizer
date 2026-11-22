@@ -44,7 +44,7 @@ describe('parseEvaluatorPrefs', () => {
   });
 
   it('round-trips comparisons and each benchmark choice', () => {
-    for (const benchmark of [{ kind: 'league-max' as const }, { kind: 'roster-max' as const }, { kind: 'player' as const, nhlId: 8478402 }, { kind: 'custom' as const, gamesPlayed: 60 }]) {
+    for (const benchmark of [{ kind: 'league-max' as const }, { kind: 'roster-max' as const }, { kind: 'per-game' as const }, { kind: 'player' as const, nhlId: 8478402 }, { kind: 'custom' as const, gamesPlayed: 60 }]) {
       const prefs = { version: 2, comparisons: [8478402, 8471675], benchmark, minGamesPlayed: 5 };
       expect(parseEvaluatorPrefs(serializeEvaluatorPrefs(prefs))).toEqual(prefs);
     }

@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { formatRange } from '../domain/dates.ts';
 import { playerGames } from '../domain/schedule.ts';
-import { matchName, parseRosterText, type MatchResult } from '../domain/rosterImport.ts';
+import { extractRosterNames, type MatchResult } from '../domain/rosterImport.ts';
 import { describeIssue, effectivePositions, validateRoster } from '../domain/roster.ts';
 import type { Player, Position, RosterEntry } from '../domain/types.ts';
 import { useApp } from './context.ts';
@@ -16,10 +16,29 @@ interface ReviewLine {
   choice: string | null;
 }
 
+/** What one Add Players action did, shown until dismissed. Only `review` needs the user. */
+interface ImportOutcome {
+  added: number;
+  alreadyOnRoster: number;
+  review: ReviewLine[];
+  unrecognized: string[];
+  ignored: number;
+}
+
+type InputMode = 'paste' | 'image' | 'search';
+const INPUT_MODES: { id: InputMode; label: string }[] = [
+  { id: 'paste', label: 'Paste Roster' },
+  { id: 'image', label: 'Upload Image' },
+  { id: 'search', label: 'Search Players' },
+];
+
 export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
   const { state, dispatch, resolve, toast, setupLine } = useApp();
-  const [mode, setMode] = useState<'paste' | 'search'>('paste');
-  const [review, setReview] = useState<ReviewLine[] | null>(null);
+  const [mode, setMode] = useState<InputMode>('paste');
+  const [outcome, setOutcome] = useState<ImportOutcome | null>(null);
+  const { data } = useApp();
+  const index = usePlayerIndex();
+  const teamIds = useMemo(() => new Set(data.teams.map((t) => t.id)), [data.teams]);
   const onRoster = useMemo(() => new Set(state.roster.map((e) => e.playerId)), [state.roster]);
 
   const playersMap = useMemo(() => {
@@ -40,10 +59,35 @@ export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
     toast(`Added ${p.name}`);
   };
 
+  /**
+   * One Add Players action, for pasted text and screenshot text alike: exact, unambiguous players are
+   * added at once; players already on the roster are skipped; only same-name or near matches wait
+   * for the user; obvious non-player text is dropped.
+   */
+  const importText = (text: string): ImportOutcome => {
+    const r = extractRosterNames(text, index, teamIds);
+    const fresh = r.matched.filter((p) => !onRoster.has(p.id));
+    if (fresh.length) dispatch({ type: 'addPlayers', ids: fresh.map((p) => p.id) });
+    // A name whose candidate is already on the roster needs no decision: count it, don't ask.
+    const settled = (x: (typeof r.review)[number]) =>
+      x.preselect ? onRoster.has(x.preselect) : x.result.status === 'ambiguous' && x.result.candidates.some((c) => onRoster.has(c.id));
+    const open = r.review.filter((x) => !settled(x));
+    const result: ImportOutcome = {
+      added: fresh.length,
+      alreadyOnRoster: r.matched.length - fresh.length + (r.review.length - open.length),
+      review: open.map((x) => ({ raw: x.raw, name: x.name, teamHint: x.teamHint, result: x.result, choice: x.preselect ?? null })),
+      unrecognized: r.unrecognized,
+      ignored: r.ignored,
+    };
+    if (fresh.length) toast(`Added ${fresh.length} player${fresh.length === 1 ? '' : 's'}`);
+    setOutcome(result);
+    return result;
+  };
+
   return (
     <div className="stack">
       <section className="panel">
-        <div className="panel-head roster-head">
+        <div className="panel-head">
           <h2>Roster</h2>
           <span className="counts">
             <span>
@@ -58,35 +102,45 @@ export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
               View Lineup →
             </button>
           )}
-          <span className="head-break" aria-hidden="true" />
-          <ClearRosterButton />
         </div>
-        <div className="panel-body stack">
+        <div className="panel-body stack roster-body">
           {setupLine && <div className="roster-setup">{setupLine}</div>}
-          <div className="mode-switch" role="tablist" aria-label="Add players">
-            <button role="tab" aria-selected={mode === 'paste'} onClick={() => setMode('paste')}>
-              Paste Roster
-            </button>
-            <button role="tab" aria-selected={mode === 'search'} onClick={() => setMode('search')}>
-              Search Players
-            </button>
+          <div className="mode-switch modes-3" role="tablist" aria-label="Add players">
+            {INPUT_MODES.map((m) => (
+              <button key={m.id} role="tab" aria-selected={mode === m.id} onClick={() => setMode(m.id)}>
+                {/* One word per line, so all three labels are two lines; the space keeps the accessible name. */}
+                {m.label.split(' ').map((w, i) => (
+                  <Fragment key={i}>
+                    {i > 0 && ' '}
+                    <span className="mode-word">{w}</span>
+                  </Fragment>
+                ))}
+              </button>
+            ))}
           </div>
+          {state.roster.length > 0 && (
+            <div className="clear-roster-row">
+              <ClearRosterButton />
+            </div>
+          )}
           {mode === 'search' && (
             <div className="add-bar">
               <PlayerSearch onPick={add} exclude={onRoster} placeholder="Add a player by name…" />
             </div>
           )}
-          {mode === 'paste' && !review && <PasteBox onParsed={setReview} />}
-          {mode === 'paste' && review && (
+          {mode === 'paste' && <PasteBox onImport={importText} />}
+          {mode === 'image' && <ImageBox onImport={importText} />}
+          {outcome && mode !== 'search' && (
             <ImportReview
-              lines={review}
-              onChange={setReview}
+              outcome={outcome}
+              onChange={(review) => setOutcome({ ...outcome, review })}
               onDone={(ids) => {
-                dispatch({ type: 'addPlayers', ids });
-                setReview(null);
-                toast(`Added ${ids.length} player${ids.length === 1 ? '' : 's'}`);
+                if (ids.length) {
+                  dispatch({ type: 'addPlayers', ids });
+                  toast(`Added ${ids.length} player${ids.length === 1 ? '' : 's'}`);
+                }
+                setOutcome(null);
               }}
-              onCancel={() => setReview(null)}
               onRoster={onRoster}
             />
           )}
@@ -116,23 +170,11 @@ export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
 }
 
 /** No autofocus: focusing on mount made phones zoom or jump when switching modes (owner report, 2026-11-21). */
-function PasteBox({ onParsed }: { onParsed: (lines: ReviewLine[]) => void }) {
-  const { data } = useApp();
-  const index = usePlayerIndex();
+function PasteBox({ onImport }: { onImport: (text: string) => ImportOutcome }) {
   const [text, setText] = useState('');
-  const teamIds = useMemo(() => new Set(data.teams.map((t) => t.id)), [data.teams]);
-  const parse = () => {
-    const parsed = parseRosterText(text, teamIds);
-    onParsed(
-      parsed.map((l) => {
-        const result = matchName(l.name, index, l.teamHint);
-        return { ...l, result, choice: result.status === 'matched' ? result.player.id : null };
-      }),
-    );
-  };
   return (
     <div className="stack" style={{ gap: 8 }}>
-      <p className="paste-hint">Paste your roster to automatically identify players</p>
+      <p className="paste-hint">Paste your roster page - player names detected automatically</p>
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -140,86 +182,225 @@ function PasteBox({ onParsed }: { onParsed: (lines: ReviewLine[]) => void }) {
         aria-label="Paste player names"
       />
       <div>
-        <button className="btn primary" disabled={!text.trim()} onClick={parse}>
-          Match Names
+        <button
+          className="btn primary"
+          disabled={!text.trim()}
+          onClick={() => {
+            const r = onImport(text);
+            if (r.added || r.alreadyOnRoster || r.review.length) setText('');
+          }}
+        >
+          Add Players
         </button>
       </div>
     </div>
   );
 }
 
+interface Shot {
+  id: number;
+  file: File;
+  status: 'reading' | 'done' | 'error';
+  text?: string;
+  ms?: number;
+}
+
+/**
+ * Upload Image: one or more roster screenshots from any fantasy site or app, added at once or a few at
+ * a time. Each is read on the device as soon as it is added; Add Players then imports the names found
+ * in all of them together (duplicates across screenshots count once).
+ */
+function ImageBox({ onImport }: { onImport: (text: string) => ImportOutcome }) {
+  const [shots, setShots] = useState<Shot[]>([]);
+  const input = useRef<HTMLInputElement>(null);
+  const nextId = useRef(1);
+  useEffect(() => {
+    // Start fetching the reader as soon as this panel opens, so the first screenshot is read sooner.
+    import('./ocr.ts').then((m) => m.warmUpOcr()).catch(() => {});
+  }, []);
+  const addFiles = (files: FileList | null) => {
+    const list = [...(files ?? [])].filter((f) => f.type.startsWith('image/'));
+    if (!list.length) return;
+    const added = list.map((file) => ({ id: nextId.current++, file, status: 'reading' as const }));
+    setShots((s) => [...s, ...added]);
+    for (const shot of added) {
+      const t0 = performance.now();
+      import('./ocr.ts')
+        .then((m) => m.readScreenshot(shot.file))
+        .then((text) => setShots((s) => s.map((x) => (x.id === shot.id ? { ...x, status: 'done', text, ms: Math.round(performance.now() - t0) } : x))))
+        .catch(() => setShots((s) => s.map((x) => (x.id === shot.id ? { ...x, status: 'error' } : x))));
+    }
+  };
+  const reading = shots.filter((s) => s.status === 'reading').length;
+  const ready = shots.filter((s) => s.status === 'done');
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        aria-label="Choose roster screenshots"
+        onChange={(e) => {
+          addFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
+      {shots.length > 0 && (
+        <ul className="shots">
+          {shots.map((s) => (
+            <li key={s.id}>
+              <span className="shot-name" title={s.file.name}>
+                {s.file.name}
+              </span>
+              <span className={`small ${s.status === 'error' ? 'bad-text' : 'muted'}`}>
+                {s.status === 'reading' ? 'Reading…' : s.status === 'error' ? 'Couldn’t read this image' : 'Ready'}
+              </span>
+              <button className="icon-btn" aria-label={`Remove ${s.file.name}`} title="Remove" onClick={() => setShots((x) => x.filter((y) => y.id !== s.id))}>
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="row-actions shot-actions">
+        <button className="btn" onClick={() => input.current?.click()} title="Screenshots are read on your device and never uploaded">
+          {shots.length ? 'Add More Screenshots' : 'Choose Screenshots'}
+        </button>
+        <button
+          className="btn primary"
+          disabled={!ready.length || reading > 0}
+          onClick={() => {
+            const r = onImport(ready.map((s) => s.text).join('\n'));
+            if (r.added || r.alreadyOnRoster || r.review.length) setShots([]);
+          }}
+        >
+          {reading ? `Reading ${reading} screenshot${reading === 1 ? '' : 's'}…` : 'Add Players'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The result of an Add Players action. Exact matches were already added; only same-name players and
+ * near matches are listed for a decision. Name-like text that matched nobody is tucked away under
+ * "Not recognized", where it can still be added as a new player.
+ */
 function ImportReview(props: {
-  lines: ReviewLine[];
+  outcome: ImportOutcome;
   onChange: (l: ReviewLine[]) => void;
   onDone: (ids: string[]) => void;
-  onCancel: () => void;
   onRoster: ReadonlySet<string>;
 }) {
-  const { teams, dispatch } = useApp();
-  const [creating, setCreating] = useState<number | null>(null);
-  const set = (i: number, choice: string | null) => props.onChange(props.lines.map((l, k) => (k === i ? { ...l, choice } : l)));
-  const chosen = [...new Set(props.lines.map((l) => l.choice).filter((c): c is string => !!c && !props.onRoster.has(c)))];
-  const counts = {
-    matched: props.lines.filter((l) => l.result.status === 'matched').length,
-    review: props.lines.filter((l) => l.result.status !== 'matched').length,
-  };
+  const { teams, dispatch, toast } = useApp();
+  const [creating, setCreating] = useState<string | null>(null);
+  const lines = props.outcome.review;
+  const set = (i: number, choice: string | null) => props.onChange(lines.map((l, k) => (k === i ? { ...l, choice } : l)));
+  const chosen = [...new Set(lines.map((l) => l.choice).filter((c): c is string => !!c && !props.onRoster.has(c)))];
+  const o = props.outcome;
+  const summary = [
+    o.added ? `${o.added} added` : '',
+    o.alreadyOnRoster ? `${o.alreadyOnRoster} already on your roster` : '',
+    lines.length ? `${lines.length} need${lines.length === 1 ? 's' : ''} a look` : '',
+  ].filter(Boolean);
+  const createForm = (key: string, name: string, teamHint?: string, onCreated?: (p: Player) => void) =>
+    creating === key && (
+      <div style={{ gridColumn: '2 / -1' }}>
+        <CustomPlayerForm
+          initialName={name}
+          initialTeam={teamHint}
+          teams={[...teams.values()]}
+          onCreate={(p) => {
+            dispatch({ type: 'addCustomPlayer', player: p });
+            if (onCreated) onCreated(p);
+            else {
+              dispatch({ type: 'addPlayers', ids: [p.id] });
+              toast(`Added ${p.name}`);
+            }
+            setCreating(null);
+          }}
+        />
+      </div>
+    );
   return (
-    <div className="panel" style={{ boxShadow: 'none' }}>
+    <div className="panel import-result" style={{ boxShadow: 'none' }}>
       <div className="panel-head">
-        <h2>
-          {counts.matched} matched{counts.review ? ` · ${counts.review} need a look` : ''}
-        </h2>
-        <button className="btn ghost" onClick={props.onCancel}>
-          Back
-        </button>
-        <button className="btn primary" disabled={chosen.length === 0} onClick={() => props.onDone(chosen)}>
-          Add {chosen.length} Player{chosen.length === 1 ? '' : 's'}
-        </button>
+        <h2>{summary.length ? summary.join(' · ') : 'No players found'}</h2>
+        {lines.length > 0 ? (
+          <>
+            <button className="btn ghost" onClick={() => props.onDone([])}>
+              Skip
+            </button>
+            <button className="btn primary" disabled={chosen.length === 0} onClick={() => props.onDone(chosen)}>
+              Add {chosen.length} Player{chosen.length === 1 ? '' : 's'}
+            </button>
+          </>
+        ) : (
+          <button className="btn ghost" onClick={() => props.onDone([])}>
+            Done
+          </button>
+        )}
       </div>
-      <div className="panel-body review">
-        {props.lines.map((l, i) => {
-          const r = l.result;
-          const candidates = r.status === 'ambiguous' || r.status === 'suggested' ? r.candidates : r.status === 'matched' ? [r.player] : [];
-          return (
-            <div key={i} className="review-row">
-              <span>{l.choice ? <span className="ok">✓</span> : r.status === 'unmatched' ? '✕' : '?'}</span>
-              <span className="raw" title={l.raw}>
-                {l.name}
-              </span>
-              <span className="opts">
-                {r.status === 'ambiguous' && <span className="small muted">Which one?</span>}
-                {r.status === 'suggested' && <span className="small muted">Did you mean</span>}
-                {r.status === 'unmatched' && <span className="small muted">No match</span>}
-                {candidates.map((c) => (
-                  <button key={c.id} className="opt" aria-pressed={l.choice === c.id} onClick={() => set(i, l.choice === c.id ? null : c.id)}>
-                    {c.name} · {c.team} · {c.positions.join('/')}
-                    {props.onRoster.has(c.id) ? ' (on roster)' : ''}
-                  </button>
-                ))}
-                {r.status !== 'matched' && (
-                  <button className="opt" onClick={() => setCreating(creating === i ? null : i)}>
-                    Add as New Player…
-                  </button>
+      {lines.length > 0 && (
+        <div className="panel-body review">
+          {lines.map((l, i) => {
+            const r = l.result;
+            const candidates = r.status === 'ambiguous' || r.status === 'suggested' ? r.candidates : r.status === 'matched' ? [r.player] : [];
+            return (
+              <div key={i} className="review-row">
+                <span>{l.choice ? <span className="ok">✓</span> : '?'}</span>
+                <span className="raw" title={l.raw}>
+                  {l.name}
+                </span>
+                <span className="opts">
+                  {r.status === 'ambiguous' && <span className="small muted">Which one?</span>}
+                  {r.status === 'suggested' && <span className="small muted">Did you mean</span>}
+                  {candidates.map((c) => (
+                    <button key={c.id} className="opt" aria-pressed={l.choice === c.id} onClick={() => set(i, l.choice === c.id ? null : c.id)}>
+                      {c.name} · {c.team} · {c.positions.join('/')}
+                      {props.onRoster.has(c.id) ? ' (on roster)' : ''}
+                    </button>
+                  ))}
+                  {r.status !== 'matched' && (
+                    <button className="opt" onClick={() => setCreating(creating === `r${i}` ? null : `r${i}`)}>
+                      Add as New Player…
+                    </button>
+                  )}
+                </span>
+                {createForm(`r${i}`, l.name, l.teamHint, (p) =>
+                  props.onChange(lines.map((x, k) => (k === i ? { ...x, choice: p.id, result: { status: 'matched', player: p } } : x))),
                 )}
-              </span>
-              {creating === i && (
-                <div style={{ gridColumn: '2 / -1' }}>
-                  <CustomPlayerForm
-                    initialName={l.name}
-                    initialTeam={l.teamHint}
-                    teams={[...teams.values()]}
-                    onCreate={(p) => {
-                      dispatch({ type: 'addCustomPlayer', player: p });
-                      props.onChange(props.lines.map((x, k) => (k === i ? { ...x, choice: p.id, result: { status: 'matched', player: p } } : x)));
-                      setCreating(null);
-                    }}
-                  />
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {(o.unrecognized.length > 0 || o.ignored > 0) && (
+        <details className="import-extra">
+          <summary className="small muted">
+            {o.unrecognized.length ? `${o.unrecognized.length} name${o.unrecognized.length === 1 ? '' : 's'} not recognized · ` : ''}
+            {o.ignored} line{o.ignored === 1 ? '' : 's'} of other text ignored
+          </summary>
+          {o.unrecognized.length > 0 && (
+            <div className="review">
+              {o.unrecognized.map((n) => (
+                <div key={n} className="review-row">
+                  <span>✕</span>
+                  <span className="raw">{n}</span>
+                  <span className="opts">
+                    <button className="opt" onClick={() => setCreating(creating === `u${n}` ? null : `u${n}`)}>
+                      Add as New Player…
+                    </button>
+                  </span>
+                  {createForm(`u${n}`, n)}
                 </div>
-              )}
+              ))}
             </div>
-          );
-        })}
-      </div>
+          )}
+        </details>
+      )}
     </div>
   );
 }
@@ -361,8 +542,10 @@ function RosterTable() {
 }
 
 /**
- * Clear Roster, a restrained red text button at the far right of the Roster heading row (owner
- * request, 2026-11-21). Same confirmation and clearRoster action as before.
+ * Clear Roster: red text on a white background with a subtle red outline (always visible), on its own
+ * row directly under the Paste Roster / Search Players toggle, aligned left (owner request,
+ * 2026-11-21). Separate from the toggle and shown in both modes. Same confirmation and clearRoster
+ * action as before.
  */
 function ClearRosterButton() {
   const { state, dispatch, toast } = useApp();
