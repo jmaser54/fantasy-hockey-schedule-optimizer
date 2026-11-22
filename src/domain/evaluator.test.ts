@@ -164,6 +164,13 @@ describe('resolveBenchmark', () => {
     expect(e.roster[0]!.stats).toMatchObject({ goals: 7, gamesPlayed: 8 }); // actual values untouched
   });
 
+  it('Full season (completed seasons) keeps the reported totals: nothing is scaled', () => {
+    const e = evaluatePlayers({ roster: [entry('nhl-2')], resolve, stats: buildStatsIndex([line(2, 8, { goals: 7, assists: 9, points: 16 }), line(9, 82)]), benchmark: { kind: 'full-season' } });
+    expect(e.benchmark).toMatchObject({ available: true, basis: 'full-season', gamesPlayed: 82 }); // league max, for labels only
+    expect(e.roster[0]!.adjusted).toMatchObject({ goals: 7, assists: 9, points: 16 });
+    expect(resolveBenchmark({ kind: 'full-season' }, [], buildStatsIndex([]))).toMatchObject({ available: false, reason: 'no-stats' });
+  });
+
   it('roster max is the highest GP among roster skaters with stats (first in roster order on ties)', () => {
     expect(resolveBenchmark({ kind: 'roster-max' }, skaters, stats)).toMatchObject({ available: true, gamesPlayed: 20, nhlId: 1, name: 'Alpha', basis: 'roster-max' });
   });
@@ -326,6 +333,9 @@ describe('rankPlayers', () => {
   });
 
   it('can order and rank by the actual value instead of the normalized one, with the same displayed values', () => {
+    const own = rankPlayers(league, { stat: 'goals', benchmarkGp: 'own', minGamesPlayed: 1 });
+    expect(own.every((x) => x.value === x.actual)).toBe(true); // full season: actual totals, ranked on them
+    expect(own.map((x) => x.actual)).toEqual([...own.map((x) => x.actual)].sort((a, b) => b! - a!));
     const r = rankPlayers(league, { stat: 'goals', benchmarkGp: 20, minGamesPlayed: 1, sortBy: 'actual' });
     expect(r.map((x) => [x.rank, x.name, x.actual, x.value])).toEqual([
       [1, 'Ten', 10, 10],

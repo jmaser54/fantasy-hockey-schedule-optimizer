@@ -72,3 +72,17 @@ export interface SkaterStatsFile {
   source: string;
   skaters: SkaterStatLine[];
 }
+
+/**
+ * Completed regular seasons with static Player Evaluator snapshots, newest first, and their games
+ * per team (both 82; the current season, 2026–27, has 84). Each is fetched once by
+ * scripts/fetch-historical-stats.ts into public/data/skater-stats-<season>.json and is not part of
+ * the frequent current-season refresh.
+ */
+export const HISTORICAL_SEASONS: readonly { season: string; teamGames: number }[] = [
+  { season: '20252026', teamGames: 82 },
+  { season: '20242025', teamGames: 82 },
+];
+
+/** Path (relative to the site base) of a season's skater-stats snapshot; the current season has no suffix. */
+export const skaterStatsPath = (season?: string): string => (season ? `data/skater-stats-${season}.json` : 'data/skater-stats.json');

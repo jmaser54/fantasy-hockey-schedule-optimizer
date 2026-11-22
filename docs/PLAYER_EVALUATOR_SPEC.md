@@ -84,7 +84,7 @@ Do not assume every field belongs in a scaled or unchanged category without chec
 - An explicitly selected benchmark is remembered across visits and both Player Evaluator destinations; users with no saved explicit choice get League max.
 - Allow the user to search for and add one or more NHL skaters who are not on their fantasy roster to the analysis. These are comparison players, not additions to the saved fantasy roster.
 - Allow the user to choose a comparison player as the benchmark. In that mode, normalize the analysis to that player's current-season GP.
-- Allow a custom benchmark GP value: a whole number from 1 through the current season's regular-season games (84 for 2026–27). Player Evaluator is a current-season tool: no historical-season support or 82-game rule; keep the limit easy to update if the NHL changes its format (Confirmed 2026-11-20).
+- Allow a custom benchmark GP value: a whole number from 1 through the current season's regular-season games (84 for 2026–27). Custom is current-season only; keep the limit easy to update if the NHL changes its format (Confirmed 2026-11-20). Completed seasons (2024–25, 2025–26) were added on 2026-11-22 at the owner's request with only Full season and Per game (see PROJECT_SOURCE_OF_TRUTH.md §I "Historical seasons"), superseding the earlier "current-season tool, no historical seasons" decision.
 - Adding/removing comparison players or changing the benchmark must not alter the user's actual saved roster.
 - External-player comparison is intended to support acquisition and trade evaluation without requiring the user to manage another fantasy team's full roster.
 

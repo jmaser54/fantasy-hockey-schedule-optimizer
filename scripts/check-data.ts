@@ -1,6 +1,7 @@
 /** Validate the committed dataset (public/data) the same way the app does at load time. */
 import { readFile } from 'node:fs/promises';
 import { buildDataset } from '../src/data/load.ts';
+import { HISTORICAL_SEASONS, skaterStatsPath } from '../src/data/format.ts';
 import { validateSkaterStats } from '../src/data/validate.ts';
 
 const schedule = JSON.parse(await readFile('public/data/schedule.json', 'utf8'));
@@ -26,4 +27,23 @@ if (statsRaw !== undefined) {
     process.exit(1);
   }
   console.log(`OK: ${stats.skaters.length} skaters with stats (fetched ${stats.fetchedAt})`);
+}
+
+// Completed seasons' static snapshots: validated (incl. completeness) when present.
+for (const { season, teamGames } of HISTORICAL_SEASONS) {
+  let raw: string;
+  try {
+    raw = await readFile(`public/${skaterStatsPath(season)}`, 'utf8');
+  } catch {
+    console.log(`warning: public/${skaterStatsPath(season)} not present yet`);
+    continue;
+  }
+  const stats = JSON.parse(raw);
+  const v = validateSkaterStats(stats, { season, teamIds: new Set(data.teams.map((t) => t.id)), completeSeasonGames: teamGames });
+  for (const w of v.warnings.slice(0, 10)) console.log(`warning (${season}): ${w}`);
+  if (v.errors.length) {
+    console.error(`Skater stats ${season} failed validation:\n${v.errors.slice(0, 20).join('\n')}`);
+    process.exit(1);
+  }
+  console.log(`OK: ${season}: ${stats.skaters.length} skaters with stats (fetched ${stats.fetchedAt})`);
 }

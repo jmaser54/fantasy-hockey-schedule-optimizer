@@ -179,6 +179,13 @@ describe('validateSkaterStats', () => {
     expect(validateSkaterStats(good(), { season: SEASON, teamIds: teams })).toEqual({ errors: [], warnings: [] });
   });
 
+  it('completed seasons must be finished: some skater played every game', () => {
+    const g = good();
+    const most = Math.max(...g.skaters.map((s) => s.gamesPlayed));
+    expect(validateSkaterStats(g, { completeSeasonGames: most }).errors).toEqual([]);
+    expect(validateSkaterStats(g, { completeSeasonGames: most + 1 }).errors.join()).toMatch(/incomplete/);
+  });
+
   it('rejects wrong season, game type, version and missing fetchedAt', () => {
     expect(validateSkaterStats({ ...good(), season: '20252026' }, { season: SEASON }).errors.join()).toMatch(/expected 20262027/);
     expect(validateSkaterStats({ ...good(), gameType: 3 }).errors.join()).toMatch(/game type 3/);

@@ -30,6 +30,9 @@ export const STAT_GROUPS: { id: StatGroupId; label: string; stats: StatKey[] }[]
 ];
 STAT_GROUPS.push({ id: 'all', label: 'All', stats: STAT_GROUPS.flatMap((g) => g.stats) });
 
+/** "20242025" → "2024–25". */
+export const seasonLabel = (season: string): string => `${season.slice(0, 4)}–${season.slice(6)}`;
+
 /** NHL position code as shown to fantasy managers. */
 export const POSITION_SHORT: Record<SkaterPositionCode, string> = { C: 'C', L: 'LW', R: 'RW', D: 'D' };
 

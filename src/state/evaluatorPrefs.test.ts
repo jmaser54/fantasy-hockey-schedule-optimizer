@@ -38,16 +38,26 @@ describe('evaluator preference keys', () => {
 
 describe('parseEvaluatorPrefs', () => {
   it('defaults to no comparisons and the league-max benchmark', () => {
-    expect(parseEvaluatorPrefs(null)).toEqual({ version: 2, comparisons: [], benchmark: { kind: 'league-max' }, minGamesPlayed: 10 });
+    expect(parseEvaluatorPrefs(null)).toEqual({ version: 2, comparisons: [], benchmark: { kind: 'league-max' }, minGamesPlayed: 10, season: null, historicalBasis: 'full-season' });
     expect(parseEvaluatorPrefs('not json')).toEqual(defaultEvaluatorPrefs());
     expect(parseEvaluatorPrefs('[1,2]')).toEqual(defaultEvaluatorPrefs());
   });
 
   it('round-trips comparisons and each benchmark choice', () => {
     for (const benchmark of [{ kind: 'league-max' as const }, { kind: 'roster-max' as const }, { kind: 'per-game' as const }, { kind: 'player' as const, nhlId: 8478402 }, { kind: 'custom' as const, gamesPlayed: 60 }]) {
-      const prefs = { version: 2, comparisons: [8478402, 8471675], benchmark, minGamesPlayed: 5 };
+      const prefs = { version: 2, comparisons: [8478402, 8471675], benchmark, minGamesPlayed: 5, season: null, historicalBasis: 'full-season' as const };
       expect(parseEvaluatorPrefs(serializeEvaluatorPrefs(prefs))).toEqual(prefs);
     }
+  });
+
+  it('remembers the selected season and completed-season benchmark; 2026-27 (null) stays the default', () => {
+    const prefs = { ...defaultEvaluatorPrefs(), season: '20242025', historicalBasis: 'per-game' as const };
+    expect(parseEvaluatorPrefs(serializeEvaluatorPrefs(prefs))).toEqual(prefs);
+    expect(defaultEvaluatorPrefs()).toMatchObject({ season: null, historicalBasis: 'full-season' });
+    // A season no longer offered, or junk, falls back to the current season and Full season.
+    expect(parseEvaluatorPrefs(JSON.stringify({ version: 2, season: '19992000', historicalBasis: 'league-max' }))).toMatchObject({ season: null, historicalBasis: 'full-season' });
+    // Saves from before this change have neither field.
+    expect(parseEvaluatorPrefs(JSON.stringify({ version: 2, comparisons: [], benchmark: { kind: 'per-game' } }))).toMatchObject({ season: null, historicalBasis: 'full-season', benchmark: { kind: 'per-game' } });
   });
 
   it('stores benchmark choices, never a GP number, so they follow the data', () => {
@@ -61,6 +71,8 @@ describe('parseEvaluatorPrefs', () => {
       comparisons: [7],
       benchmark: { kind: 'league-max' },
       minGamesPlayed: 12,
+      season: null,
+      historicalBasis: 'full-season',
     });
     expect(parseEvaluatorPrefs(JSON.stringify({ version: 1, benchmark: { kind: 'custom', gamesPlayed: 60 } })).benchmark).toEqual({ kind: 'custom', gamesPlayed: 60 });
     expect(parseEvaluatorPrefs(JSON.stringify({ version: 1, benchmark: { kind: 'player', nhlId: 7 } })).benchmark).toEqual({ kind: 'player', nhlId: 7 });
@@ -69,7 +81,7 @@ describe('parseEvaluatorPrefs', () => {
 
   it('drops bad values field by field', () => {
     const p = parseEvaluatorPrefs(JSON.stringify({ comparisons: [5, 5, 'x', -1, 2.5, 7], benchmark: { kind: 'custom', gamesPlayed: 0 } }));
-    expect(p).toEqual({ version: 2, comparisons: [5, 7], benchmark: { kind: 'league-max' }, minGamesPlayed: 10 });
+    expect(p).toEqual({ version: 2, comparisons: [5, 7], benchmark: { kind: 'league-max' }, minGamesPlayed: 10, season: null, historicalBasis: 'full-season' });
     for (const bad of [0, 85, 2.5, '5']) expect(parseEvaluatorPrefs(JSON.stringify({ minGamesPlayed: bad })).minGamesPlayed).toBe(10);
     expect(parseEvaluatorPrefs(JSON.stringify({ minGamesPlayed: 1 })).minGamesPlayed).toBe(1);
     expect(parseEvaluatorPrefs(JSON.stringify({ comparisons: 'x', benchmark: { kind: 'player' } }))).toEqual(defaultEvaluatorPrefs());
@@ -78,14 +90,14 @@ describe('parseEvaluatorPrefs', () => {
 
 describe('clearComparisons', () => {
   it('removes every comparison player and keeps the other preferences', () => {
-    const prefs = { version: 2, comparisons: [7, 8], benchmark: { kind: 'custom' as const, gamesPlayed: 40 }, minGamesPlayed: 5 };
+    const prefs = { version: 2, comparisons: [7, 8], benchmark: { kind: 'custom' as const, gamesPlayed: 40 }, minGamesPlayed: 5, season: null, historicalBasis: 'full-season' as const };
     expect(clearComparisons(prefs)).toEqual({ ...prefs, comparisons: [] });
     expect(prefs.comparisons).toEqual([7, 8]); // input untouched
     for (const benchmark of [{ kind: 'league-max' as const }, { kind: 'roster-max' as const }]) expect(clearComparisons({ ...prefs, benchmark }).benchmark).toEqual(benchmark);
   });
 
   it('returns a cleared benchmark player to the default, league max', () => {
-    expect(clearComparisons({ version: 2, comparisons: [7], benchmark: { kind: 'player', nhlId: 7 }, minGamesPlayed: 10 }).benchmark).toEqual({ kind: 'league-max' });
+    expect(clearComparisons({ version: 2, comparisons: [7], benchmark: { kind: 'player', nhlId: 7 }, minGamesPlayed: 10, season: null, historicalBasis: 'full-season' as const }).benchmark).toEqual({ kind: 'league-max' });
   });
 });
 
@@ -105,7 +117,7 @@ describe('saving and loading evaluator preferences', () => {
     const rosterBefore = storage.getItem(STORAGE_KEY);
     expect(rosterBefore).toBe(serialize(state));
 
-    const prefs = { version: 2, comparisons: [7], benchmark: { kind: 'custom' as const, gamesPlayed: 40 }, minGamesPlayed: 3 };
+    const prefs = { version: 2, comparisons: [7], benchmark: { kind: 'custom' as const, gamesPlayed: 40 }, minGamesPlayed: 3, season: null, historicalBasis: 'full-season' as const };
     expect(saveEvaluatorPrefs(prefs)).toBe(true);
     expect(loadEvaluatorPrefs()).toEqual(prefs);
     expect(storage.getItem(STORAGE_KEY)).toBe(rosterBefore);

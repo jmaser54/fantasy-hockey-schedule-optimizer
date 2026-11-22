@@ -1,8 +1,9 @@
+import { HISTORICAL_SEASONS } from '../data/format.ts';
 import { DEFAULT_BENCHMARK, DEFAULT_RANKING_MIN_GP, SEASON_GAMES, type BenchmarkChoice } from '../domain/evaluator.ts';
 
 /**
- * Player Evaluator preferences: comparison players, the selected benchmark and the rankings'
- * minimum games played. Kept in their own
+ * Player Evaluator preferences: comparison players, the selected benchmark, the rankings'
+ * minimum games played, and the selected season with its completed-season benchmark (2026-11-22). Kept in their own
  * browser-storage key, separate from the saved fantasy roster (`playoff-optimizer:v1`), so changing
  * them never touches the roster and the roster's persistence model is unchanged. The live and testing
  * sites share one browser storage, so the testing build uses its own key, as for the app state.
@@ -28,10 +29,16 @@ export interface EvaluatorPrefs {
   benchmark: BenchmarkChoice;
   /** League-wide rankings leave out skaters below this many games. */
   minGamesPlayed: number;
+  /** Selected completed season (one of HISTORICAL_SEASONS), or null for the current season (the default). */
+  season: string | null;
+  /** Completed seasons' benchmark: Full season (default) or Per game. The current-season benchmark is `benchmark`. */
+  historicalBasis: HistoricalBasis;
 }
 
+export type HistoricalBasis = 'full-season' | 'per-game';
+
 export function defaultEvaluatorPrefs(): EvaluatorPrefs {
-  return { version: EVALUATOR_PREFS_VERSION, comparisons: [], benchmark: DEFAULT_BENCHMARK, minGamesPlayed: DEFAULT_RANKING_MIN_GP };
+  return { version: EVALUATOR_PREFS_VERSION, comparisons: [], benchmark: DEFAULT_BENCHMARK, minGamesPlayed: DEFAULT_RANKING_MIN_GP, season: null, historicalBasis: 'full-season' };
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -63,7 +70,10 @@ export function parseEvaluatorPrefs(raw: string | null): EvaluatorPrefs {
   const minGamesPlayed = Number.isInteger(minGp) && (minGp as number) >= 1 && (minGp as number) <= SEASON_GAMES ? (minGp as number) : base.minGamesPlayed;
   let benchmark = loadBenchmark(data.benchmark) ?? base.benchmark;
   if (benchmark.kind === 'roster-max' && !(typeof data.version === 'number' && data.version >= 2)) benchmark = base.benchmark;
-  return { ...base, comparisons, benchmark, minGamesPlayed };
+  // A season that is no longer offered (or anything unreadable) falls back to the current season.
+  const season = typeof data.season === 'string' && HISTORICAL_SEASONS.some((h) => h.season === data.season) ? data.season : null;
+  const historicalBasis: HistoricalBasis = data.historicalBasis === 'per-game' ? 'per-game' : 'full-season';
+  return { ...base, comparisons, benchmark, minGamesPlayed, season, historicalBasis };
 }
 
 /**
@@ -75,7 +85,14 @@ export function clearComparisons(prefs: EvaluatorPrefs): EvaluatorPrefs {
 }
 
 export function serializeEvaluatorPrefs(prefs: EvaluatorPrefs): string {
-  return JSON.stringify({ version: EVALUATOR_PREFS_VERSION, comparisons: prefs.comparisons, benchmark: prefs.benchmark, minGamesPlayed: prefs.minGamesPlayed });
+  return JSON.stringify({
+    version: EVALUATOR_PREFS_VERSION,
+    comparisons: prefs.comparisons,
+    benchmark: prefs.benchmark,
+    minGamesPlayed: prefs.minGamesPlayed,
+    season: prefs.season,
+    historicalBasis: prefs.historicalBasis,
+  });
 }
 
 export function loadEvaluatorPrefs(key = EVALUATOR_PREFS_KEY): EvaluatorPrefs {

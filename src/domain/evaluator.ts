@@ -171,6 +171,8 @@ export type BenchmarkChoice =
   | { kind: 'league-max' }
   | { kind: 'roster-max' }
   | { kind: 'per-game' }
+  /** Completed seasons: actual season totals, not normalized. */
+  | { kind: 'full-season' }
   | { kind: 'player'; nhlId: number }
   | { kind: 'custom'; gamesPlayed: number };
 
@@ -182,7 +184,7 @@ export const DEFAULT_BENCHMARK: BenchmarkChoice = { kind: 'league-max' };
  * and the fallback for roster-max when no rostered skater has stats), the roster's highest GP, a
  * chosen player, or a custom value.
  */
-export type BenchmarkBasis = 'roster-max' | 'league-max' | 'per-game' | 'player' | 'custom';
+export type BenchmarkBasis = 'roster-max' | 'league-max' | 'per-game' | 'full-season' | 'player' | 'custom';
 
 export type Benchmark =
   | { available: true; gamesPlayed: number; choice: BenchmarkChoice; basis: BenchmarkBasis; /** Who set it (roster-max / player). */ nhlId?: number; name?: string }
@@ -190,7 +192,7 @@ export type Benchmark =
 
 /**
  * Regular-season games per team in the current NHL season (84 in 2026–27): the upper limit for a
- * custom benchmark. Player Evaluator only covers the current season; update this if the format changes.
+ * custom benchmark (current season only; completed seasons offer Full season and Per game). Update this if the format changes.
  */
 export const SEASON_GAMES = 84;
 
@@ -204,6 +206,13 @@ export const SEASON_GAMES = 84;
 export function resolveBenchmark(choice: BenchmarkChoice, rosterSkaters: readonly Subject[], stats: StatsIndex): Benchmark {
   // Per Game: a built-in 1 GP benchmark, i.e. each counting stat per game played.
   if (choice.kind === 'per-game') return { available: true, gamesPlayed: 1, choice, basis: 'per-game' };
+  // Full season: every player's own GP, so counting stats stay as reported. gamesPlayed is the
+  // league max only for labels; evaluateSubject and rankPlayers never scale under this basis.
+  if (choice.kind === 'full-season') {
+    let leagueMax = 0;
+    for (const line of stats.values()) leagueMax = Math.max(leagueMax, line.gamesPlayed);
+    return leagueMax > 0 ? { available: true, gamesPlayed: leagueMax, choice, basis: 'full-season' } : { available: false, choice, reason: 'no-stats' };
+  }
   if (choice.kind === 'custom') {
     const gp = choice.gamesPlayed;
     return Number.isInteger(gp) && gp >= 1 && gp <= SEASON_GAMES
@@ -240,7 +249,8 @@ export function evaluateSubject(subject: Subject, benchmark: Benchmark): Evaluat
   if (subject.status !== 'ok' || !subject.stats || !benchmark.available) return { ...subject, adjusted: null };
   const s = subject.stats;
   const adjusted = {} as Record<ScaledStatKey, number>;
-  for (const key of SCALED_STATS) adjusted[key] = adjustedValue(s[key], s.gamesPlayed, benchmark.gamesPlayed)!;
+  // Full season: the reported totals (each player's own GP as the benchmark).
+  for (const key of SCALED_STATS) adjusted[key] = benchmark.basis === 'full-season' ? s[key] : adjustedValue(s[key], s.gamesPlayed, benchmark.gamesPlayed)!;
   return { ...subject, adjusted };
 }
 
@@ -289,8 +299,8 @@ export const RANKING_STATS: readonly StatKey[] = [...SCALED_STATS, 'plusMinus', 
 
 export interface RankingOptions {
   stat: StatKey;
-  /** Benchmark GP for scaled stats. Required for them; ignored for unchanged stats. */
-  benchmarkGp?: number;
+  /** Benchmark GP for scaled stats, or 'own' (full season: each player's own GP, i.e. actual totals). Required for scaled stats. */
+  benchmarkGp?: number | 'own';
   /** NHL ids to flag as on the user's roster (blue-dot indicator in the UI). */
   rosterNhlIds?: ReadonlySet<number>;
   /** Leave out skaters below this many games (default DEFAULT_RANKING_MIN_GP; 1 includes everyone with stats). */
@@ -328,7 +338,9 @@ export interface RankedPlayer {
  */
 export function rankPlayers(skaters: readonly SkaterStatLine[], opts: RankingOptions): RankedPlayer[] {
   const scaled = isScaledStat(opts.stat);
-  if (scaled && !(opts.benchmarkGp !== undefined && opts.benchmarkGp > 0)) throw new Error(`rankPlayers: ${opts.stat} needs a positive benchmarkGp`);
+  const own = opts.benchmarkGp === 'own';
+  const benchmarkGp = own ? undefined : (opts.benchmarkGp as number | undefined);
+  if (scaled && !own && !(benchmarkGp !== undefined && benchmarkGp > 0)) throw new Error(`rankPlayers: ${opts.stat} needs a positive benchmarkGp`);
   const minGp = opts.minGamesPlayed ?? DEFAULT_RANKING_MIN_GP;
   const positions = opts.positions ? new Set(opts.positions) : undefined;
   const sign = opts.direction === 'asc' ? 1 : -1;
@@ -344,7 +356,7 @@ export function rankPlayers(skaters: readonly SkaterStatLine[], opts: RankingOpt
         teams: s.teams,
         gamesPlayed: s.gamesPlayed,
         actual,
-        value: actual === null ? null : scaled ? adjustedValue(actual, s.gamesPlayed, opts.benchmarkGp) : actual,
+        value: actual === null ? null : scaled && !own ? adjustedValue(actual, s.gamesPlayed, benchmarkGp) : actual,
         onRoster: opts.rosterNhlIds?.has(s.nhlId) ?? false,
       };
     });

@@ -79,7 +79,7 @@ describe('evaluateSavedRoster', () => {
   });
 
   it('applies saved preferences: comparisons and an explicit benchmark', () => {
-    const prefs = parseEvaluatorPrefs(serializeEvaluatorPrefs({ version: 1, comparisons: [7, 1], benchmark: { kind: 'player', nhlId: 7 }, minGamesPlayed: 10 }));
+    const prefs = parseEvaluatorPrefs(serializeEvaluatorPrefs({ version: 1, comparisons: [7, 1], benchmark: { kind: 'player', nhlId: 7 }, minGamesPlayed: 10, season: null, historicalBasis: 'full-season' }));
     const r = evaluateSavedRoster(savedState(), players, stats, prefs);
     expect(r.evaluation.comparisons.map((c) => c.name)).toEqual(['External']);
     expect(r.evaluation.alreadyOnRoster).toEqual([1]);

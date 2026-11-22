@@ -113,7 +113,13 @@ const isFraction = (v: unknown): v is number => typeof v === 'number' && v >= 0 
  */
 export function validateSkaterStats(
   data: unknown,
-  opts: { season?: string; teamIds?: ReadonlySet<string>; previous?: SkaterStatsFile } = {},
+  opts: {
+    season?: string;
+    teamIds?: ReadonlySet<string>;
+    previous?: SkaterStatsFile;
+    /** Completed seasons only: games per team. The season must be finished (some skater played every game). */
+    completeSeasonGames?: number;
+  } = {},
 ): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -153,6 +159,10 @@ export function validateSkaterStats(
     if (typeof s.toiPerGame !== 'number' || !(s.toiPerGame > 0) || s.toiPerGame > 3600) errors.push(`${who} has invalid time on ice.`);
   }
   if (file.skaters.length === 0) errors.push('Skater stats file has no skaters.');
+  if (opts.completeSeasonGames && file.skaters.length > 0) {
+    const maxGp = Math.max(...file.skaters.map((s) => (isObj(s) && isInt(s.gamesPlayed) ? s.gamesPlayed : 0)));
+    if (maxGp < opts.completeSeasonGames) errors.push(`Season looks incomplete: the most games played is ${maxGp}; expected at least ${opts.completeSeasonGames}.`);
+  }
   const prev = opts.previous;
   if (prev && prev.season === file.season && Array.isArray(prev.skaters)) {
     if (file.skaters.length < prev.skaters.length * 0.9) {

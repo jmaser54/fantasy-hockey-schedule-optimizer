@@ -1,0 +1,68 @@
+name: Historical skater stats
+
+# Completed seasons are static snapshots: fetched on demand only, never on the
+# current-season refresh schedule (refresh-data.yml).
+on:
+  workflow_dispatch:
+    inputs:
+      seasons:
+        description: 'Comma-separated seasons (empty = all in HISTORICAL_SEASONS)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: historical-stats-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Fetch and validate
+        env:
+          SEASONS: ${{ inputs.seasons }}
+        run: npm run data:historical
+      - name: Upload raw responses and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-raw
+          path: data-raw/
+          if-no-files-found: ignore
+      - name: Commit snapshots
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git add public/data/skater-stats-*.json
+          if git diff --cached --quiet; then
+            echo "No changes."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "data: historical skater stats snapshots"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy:
+    needs: fetch
+    if: needs.fetch.outputs.changed == 'true'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy-pages.yml

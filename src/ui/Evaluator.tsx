@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { SkaterPositionCode, SkaterStatLine, SkaterStatsFile } from '../data/format.ts';
+import { HISTORICAL_SEASONS, type SkaterPositionCode, type SkaterStatLine, type SkaterStatsFile } from '../data/format.ts';
 import { evaluateSavedRoster, loadSkaterStats } from '../data/evaluatorData.ts';
 import { STALE_AFTER_MS } from '../data/load.ts';
 import { formatShort } from '../domain/dates.ts';
 import {
+  buildStatsIndex,
   DEFAULT_BENCHMARK,
   evaluateSubject,
   isScaledStat,
@@ -19,7 +20,7 @@ import type { Player } from '../domain/types.ts';
 import { clearComparisons, loadEvaluatorPrefs, saveEvaluatorPrefs, type EvaluatorPrefs } from '../state/evaluatorPrefs.ts';
 import { useApp } from './context.ts';
 import { InfoTip } from './common.tsx';
-import { adjustedDecimals, formatAdjusted, formatStat, mergeComparisons, POSITION_SHORT, searchSkaters, sortRows, STAT_GROUPS, STAT_SHORT, type StatGroupId } from './evaluatorFormat.ts';
+import { adjustedDecimals, formatAdjusted, formatStat, mergeComparisons, POSITION_SHORT, searchSkaters, seasonLabel, sortRows, STAT_GROUPS, STAT_SHORT, type StatGroupId } from './evaluatorFormat.ts';
 
 /**
  * Player Evaluator (first functional prototype). Reads the saved roster, never changes it, and keeps
@@ -29,13 +30,18 @@ import { adjustedDecimals, formatAdjusted, formatStat, mergeComparisons, POSITIO
 
 type StatsStatus = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; file: SkaterStatsFile };
 
-let statsRequest: Promise<SkaterStatsFile> | null = null;
-function requestStats(season: string): Promise<SkaterStatsFile> {
-  statsRequest ??= loadSkaterStats(undefined, { season }).catch((err: unknown) => {
-    statsRequest = null; // allow a retry
-    throw err;
-  });
-  return statsRequest;
+/** One request per season per page load; completed seasons are fetched only when first selected. */
+const statsRequests = new Map<string, Promise<SkaterStatsFile>>();
+function requestStats(season: string, historical?: { teamGames: number }): Promise<SkaterStatsFile> {
+  let req = statsRequests.get(season);
+  if (!req) {
+    req = loadSkaterStats(undefined, { season, historical }).catch((err: unknown) => {
+      statsRequests.delete(season); // allow a retry
+      throw err;
+    });
+    statsRequests.set(season, req);
+  }
+  return req;
 }
 
 const LABEL = new Map(STAT_DEFINITIONS.map((d) => [d.key, d.label]));
@@ -81,19 +87,54 @@ function Evaluator({ file, page, onGoRoster }: { file: SkaterStatsFile; page: Ev
     saveEvaluatorPrefs(prefs);
   }, [prefs]);
 
-  const result = useMemo(() => evaluateSavedRoster(state, data.players, file, prefs), [state, data.players, file, prefs]);
+  // Season (saved with the preferences; default the current season) or a completed season's static snapshot.
+  const season = prefs.season ?? file.season;
+  const setSeason = (s: string) => setPrefs((p) => ({ ...p, season: s === file.season ? null : s }));
+  const historical = HISTORICAL_SEASONS.find((h) => h.season === season);
+  const [histStatus, setHistStatus] = useState<StatsStatus>({ state: 'loading' });
+  const [histAttempt, setHistAttempt] = useState(0);
+  // Completed seasons offer only Full season (default) and Per game; saved separately from the current-season benchmark.
+  const histChoice = useMemo<BenchmarkChoice>(() => ({ kind: prefs.historicalBasis }), [prefs.historicalBasis]);
+  useEffect(() => {
+    if (!historical) return;
+    let live = true;
+    setHistStatus({ state: 'loading' });
+    requestStats(historical.season, historical)
+      .then((f) => live && setHistStatus({ state: 'ready', file: f }))
+      .catch((err: Error) => live && setHistStatus({ state: 'error', message: err.message }));
+    return () => {
+      live = false;
+    };
+  }, [historical, histAttempt]);
+  const shown = !historical ? file : histStatus.state === 'ready' && histStatus.file.season === season ? histStatus.file : null;
+  const choice = historical ? histChoice : prefs.benchmark;
+  const currentIndex = useMemo(() => buildStatsIndex(file.skaters), [file]);
+  const result = useMemo(() => {
+    if (!shown) return null;
+    const r = evaluateSavedRoster(state, data.players, shown, { comparisons: prefs.comparisons, benchmark: choice });
+    // A comparison player without games in a past season keeps their name from the current snapshot.
+    for (const c of r.evaluation.comparisons) if (c.status === 'no-games' && c.nhlId !== undefined) c.name = currentIndex.get(c.nhlId)?.name ?? c.name;
+    return r;
+  }, [state, data.players, shown, prefs.comparisons, choice, currentIndex]);
   const directoryByNhlId = useMemo(() => {
     const m = new Map<number, Player>();
     for (const p of data.players) if (p.nhlId !== undefined) m.set(p.nhlId, p);
     return m;
   }, [data.players]);
-  const teamOf = (nhlId: number | undefined, line?: SkaterStatLine) => (nhlId !== undefined ? directoryByNhlId.get(nhlId)?.team : undefined) ?? line?.teams.join('/') ?? '';
+  // Past seasons show the team(s) the player played for that season; the current season the directory team.
+  const teamOf = (nhlId: number | undefined, line?: SkaterStatLine) =>
+    (historical && line ? line.teams.join('/') : undefined) ?? (nhlId !== undefined ? directoryByNhlId.get(nhlId)?.team : undefined) ?? line?.teams.join('/') ?? '';
+  const label = seasonLabel(season);
+  const totals = result?.evaluation.benchmark.available === true && result.evaluation.benchmark.basis === 'full-season';
 
   const fetched = Date.parse(file.fetchedAt);
   const stale = Number.isNaN(fetched) || Date.now() - fetched > STALE_AFTER_MS;
   const when = formatShort(file.fetchedAt.slice(0, 10));
 
-  const setBenchmark = (benchmark: BenchmarkChoice) => setPrefs((p) => ({ ...p, benchmark }));
+  const setBenchmark = (benchmark: BenchmarkChoice) =>
+    setPrefs((p) =>
+      historical ? (benchmark.kind === 'full-season' || benchmark.kind === 'per-game' ? { ...p, historicalBasis: benchmark.kind } : p) : { ...p, benchmark },
+    );
   const removeComparison = (id: number) =>
     setPrefs((p) => ({
       ...p,
@@ -103,7 +144,7 @@ function Evaluator({ file, page, onGoRoster }: { file: SkaterStatsFile; page: Ev
   const addComparison = (id: number) => setPrefs((p) => (p.comparisons.includes(id) ? p : { ...p, comparisons: [...p.comparisons, id] }));
   // Clears comparison players only (their own storage key, never the roster); a cleared benchmark player falls back to league max.
   const clearAllComparisons = () => {
-    if (prefs.benchmark.kind === 'player') toast('Comparison players cleared. Benchmark reset to League max.');
+    if (prefs.benchmark.kind === 'player' && !historical) toast('Comparison players cleared. Benchmark reset to League max.');
     setPrefs(clearComparisons);
   };
 
@@ -116,14 +157,38 @@ function Evaluator({ file, page, onGoRoster }: { file: SkaterStatsFile; page: Ev
             {page === 'roster' ? 'Your skaters’ production, normalized to the same number of games.' : 'Every NHL skater’s production, normalized to your benchmark.'}
           </p>
         </div>
-        <span className={stale ? 'badge warn' : 'small muted'} title={`NHL regular-season stats, fetched ${file.fetchedAt.replace('T', ' ').slice(0, 16)} UTC`}>
-          {stale ? `Stats from ${when}, may be outdated` : `NHL stats updated ${when}`}
-        </span>
+        {historical ? (
+          <span className="small muted">NHL {label} regular season (final)</span>
+        ) : (
+          <span className={stale ? 'badge warn' : 'small muted'} title={`NHL regular-season stats, fetched ${file.fetchedAt.replace('T', ' ').slice(0, 16)} UTC`}>
+            {stale ? `Stats from ${when}, may be outdated` : `NHL stats updated ${when}`}
+          </span>
+        )}
       </div>
 
-      <BenchmarkBar benchmark={result.evaluation.benchmark} choice={prefs.benchmark} comparisons={result.evaluation.comparisons} onChange={setBenchmark} />
+      <BenchmarkBar
+        benchmark={result?.evaluation.benchmark}
+        choice={choice}
+        comparisons={result?.evaluation.comparisons ?? []}
+        onChange={setBenchmark}
+        season={season}
+        seasons={[file.season, ...HISTORICAL_SEASONS.map((h) => h.season)]}
+        historical={!!historical}
+        onSeason={setSeason}
+      />
 
-      {page === 'roster' ? (
+      {!result ? (
+        histStatus.state === 'error' ? (
+          <div className="notice error">
+            <b>{label} stats couldn’t be loaded.</b> <span className="muted small">{histStatus.message}</span>{' '}
+            <button className="btn small" onClick={() => setHistAttempt((a) => a + 1)}>
+              Try again
+            </button>
+          </div>
+        ) : (
+          <div className="empty">Loading {label} NHL player stats…</div>
+        )
+      ) : page === 'roster' ? (
         <RosterPanel
             roster={result.evaluation.roster}
             comparisons={result.evaluation.comparisons}
@@ -135,9 +200,12 @@ function Evaluator({ file, page, onGoRoster }: { file: SkaterStatsFile; page: Ev
             goalies={result.evaluation.goalies.map((g) => g.name)}
             sortBasis={sortBasis}
             onSortBasis={setSortBasis}
+            totals={totals}
+            noGames={historical ? `No NHL games in ${label}` : undefined}
+            seasonText={label}
             footer={
               <div className="ev-cmp-row">
-                <ComparisonSearch skaters={file.skaters} exclude={new Set([...result.rosterNhlIds, ...prefs.comparisons])} teamOf={teamOf} onAdd={addComparison} />
+                <ComparisonSearch skaters={shown!.skaters} exclude={new Set([...result.rosterNhlIds, ...prefs.comparisons])} teamOf={teamOf} onAdd={addComparison} />
                 {result.evaluation.comparisons.length > 0 && (
                   <button type="button" className="btn small" onClick={clearAllComparisons}>
                     Clear comparison players
@@ -148,8 +216,9 @@ function Evaluator({ file, page, onGoRoster }: { file: SkaterStatsFile; page: Ev
           />
       ) : (
         <RankingsPanel
-          skaters={file.skaters}
+          skaters={shown!.skaters}
           benchmark={result.evaluation.benchmark}
+          totals={totals}
           rosterNhlIds={result.rosterNhlIds}
           minGamesPlayed={prefs.minGamesPlayed}
           onMinGamesPlayed={(minGamesPlayed) => setPrefs((p) => ({ ...p, minGamesPlayed }))}
@@ -175,6 +244,8 @@ function benchmarkSource(b: Benchmark): string {
         : `League max: the highest GP among all NHL skaters this season (${b.gamesPlayed}).`;
     case 'per-game':
       return 'Per game: each counting stat per game played (benchmark 1 GP).';
+    case 'full-season':
+      return 'Full season: actual season totals, not normalized.';
     case 'roster-max':
       return `Roster max: the highest GP among your rostered skaters with stats (${b.gamesPlayed}${b.name ? `, ${b.name}` : ''}).`;
     case 'player':
@@ -184,8 +255,21 @@ function benchmarkSource(b: Benchmark): string {
   }
 }
 
-function BenchmarkBar(props: { benchmark: Benchmark; choice: BenchmarkChoice; comparisons: EvaluatedSubject[]; onChange: (c: BenchmarkChoice) => void }) {
-  const { benchmark, choice, onChange } = props;
+function BenchmarkBar(props: {
+  /** Undefined while a completed season's stats are loading. */
+  benchmark: Benchmark | undefined;
+  choice: BenchmarkChoice;
+  comparisons: EvaluatedSubject[];
+  onChange: (c: BenchmarkChoice) => void;
+  season: string;
+  /** The current season first, then completed seasons. */
+  seasons: string[];
+  historical: boolean;
+  onSeason: (season: string) => void;
+}) {
+  const { choice, onChange, historical } = props;
+  const benchmark: Benchmark = props.benchmark ?? { available: false, choice, reason: 'no-stats' };
+  const totals = benchmark.available && benchmark.basis === 'full-season';
   const [draft, setDraft] = useState(choice.kind === 'custom' ? String(choice.gamesPlayed) : '');
   useEffect(() => {
     if (choice.kind === 'custom') setDraft(String(choice.gamesPlayed));
@@ -196,7 +280,7 @@ function BenchmarkBar(props: { benchmark: Benchmark; choice: BenchmarkChoice; co
   const draftValid = /^\d+$/.test(draft) && draftNum >= 1 && draftNum <= SEASON_GAMES;
 
   const select = (v: string) => {
-    if (v === 'league-max' || v === 'roster-max' || v === 'per-game') onChange({ kind: v });
+    if (v === 'league-max' || v === 'roster-max' || v === 'per-game' || v === 'full-season') onChange({ kind: v });
     else if (v === 'custom') onChange({ kind: 'custom', gamesPlayed: benchmark.available ? benchmark.gamesPlayed : SEASON_GAMES });
     else onChange({ kind: 'player', nhlId: Number(v.slice(2)) });
   };
@@ -205,23 +289,27 @@ function BenchmarkBar(props: { benchmark: Benchmark; choice: BenchmarkChoice; co
     <div className="panel bench">
       <div className="bench-main">
         <div className="bench-value">
-          {benchmark.available ? (
+          {totals ? (
+            <b>Full-season totals</b>
+          ) : benchmark.available ? (
             <>
               Normalized to <b>{benchmark.gamesPlayed} GP</b>
             </>
           ) : (
-            <b>No benchmark</b>
+            <b>{props.benchmark ? 'No benchmark' : 'Loading…'}</b>
           )}
           <InfoTip label="How the benchmark works">
             {benchmark.available && <span>{benchmarkSource(benchmark)}</span>}
-            <span>
-              Counting stats are shown as if every player had played the same number of games: <b>stat ÷ GP × benchmark</b>. Actual totals stay visible.
-            </span>
+            {!totals && (
+              <span>
+                Counting stats are shown as if every player had played the same number of games: <b>stat ÷ GP × benchmark</b>. Actual totals stay visible.
+              </span>
+            )}
             <span>+/-, S%, FO% and TOI are shown as reported.</span>
             <span>This compares observed production. It isn’t a projection.</span>
           </InfoTip>
         </div>
-        {!benchmark.available && <div className="small muted">Choose a benchmark to see normalized stats.</div>}
+        {!benchmark.available && props.benchmark && <div className="small muted">Choose a benchmark to see normalized stats.</div>}
         {benchmark.available && benchmark.choice.kind === 'roster-max' && benchmark.basis === 'league-max' && (
           <div className="small muted">Roster max unavailable, using league max</div>
         )}
@@ -230,19 +318,27 @@ function BenchmarkBar(props: { benchmark: Benchmark; choice: BenchmarkChoice; co
         <label className="small muted" htmlFor="bench-select">
           Benchmark
         </label>
-        <select id="bench-select" value={value} onChange={(e) => select(e.target.value)}>
-          <option value="league-max">League max</option>
-          <option value="roster-max">Roster max</option>
-          <option value="per-game">Per game</option>
-          {players.map((p) => (
-            <option key={p.nhlId} value={`p:${p.nhlId}`}>
-              {p.name} ({p.stats!.gamesPlayed} GP)
-            </option>
-          ))}
-          {choice.kind === 'player' && !players.some((p) => p.nhlId === choice.nhlId) && <option value={value}>Comparison player</option>}
-          <option value="custom">Custom…</option>
-        </select>
-        {choice.kind === 'custom' && (
+        {historical ? (
+          // Completed seasons: actual totals or per game only.
+          <select id="bench-select" value={value} onChange={(e) => select(e.target.value)}>
+            <option value="full-season">Full season</option>
+            <option value="per-game">Per game</option>
+          </select>
+        ) : (
+          <select id="bench-select" value={value} onChange={(e) => select(e.target.value)}>
+            <option value="league-max">League max</option>
+            <option value="roster-max">Roster max</option>
+            <option value="per-game">Per game</option>
+            {players.map((p) => (
+              <option key={p.nhlId} value={`p:${p.nhlId}`}>
+                {p.name} ({p.stats!.gamesPlayed} GP)
+              </option>
+            ))}
+            {choice.kind === 'player' && !players.some((p) => p.nhlId === choice.nhlId) && <option value={value}>Comparison player</option>}
+            <option value="custom">Custom…</option>
+          </select>
+        )}
+        {!historical && choice.kind === 'custom' && (
           <span className="bench-custom">
             <input
               type="number"
@@ -263,6 +359,19 @@ function BenchmarkBar(props: { benchmark: Benchmark; choice: BenchmarkChoice; co
             {!draftValid && <span className="badge bad">1–{SEASON_GAMES}</span>}
           </span>
         )}
+        {/* Label and select wrap together on narrow screens. */}
+        <span className="bench-season">
+          <label className="small muted" htmlFor="season-select">
+            Season
+          </label>
+          <select id="season-select" value={props.season} onChange={(e) => props.onSeason(e.target.value)}>
+            {props.seasons.map((s) => (
+              <option key={s} value={s}>
+                {seasonLabel(s)}
+              </option>
+            ))}
+          </select>
+        </span>
       </div>
     </div>
   );
@@ -395,6 +504,11 @@ function RosterPanel(props: {
   footer: React.ReactNode;
   sortBasis: SortBasis;
   onSortBasis: (v: SortBasis) => void;
+  /** Full season: cells show the actual totals only. */
+  totals: boolean;
+  /** Reason text for players without games in a completed season. */
+  noGames?: string;
+  seasonText: string;
 }) {
   const [group, setGroup] = useState<StatGroupId>('all');
   const decimals = adjustedDecimals(props.benchmark.available ? props.benchmark.basis : undefined);
@@ -404,7 +518,7 @@ function RosterPanel(props: {
   const onSort = (key: StatKey) => setSort((s) => (s?.key === key ? (s.dir === 'desc' ? { key, dir: 'asc' } : null) : { key, dir: 'desc' }));
   // Comparison players sit among rostered players by position, and join the same sort.
   const merged = mergeComparisons(props.roster, props.comparisons);
-  const rows = sort ? sortRows(merged, sort.key, sort.dir, props.sortBasis === 'normalized' && isScaledStat(sort.key)) : merged;
+  const rows = sort ? sortRows(merged, sort.key, sort.dir, !props.totals && props.sortBasis === 'normalized' && isScaledStat(sort.key)) : merged;
 
   const row = (s: EvaluatedSubject) => {
     const kind = s.source;
@@ -429,12 +543,12 @@ function RosterPanel(props: {
           <>
             <td className="n">{s.stats.gamesPlayed}</td>
             {stats.map((k) => (
-              <StatCell key={k} subject={s} stat={k} decimals={decimals} />
+              <StatCell key={k} subject={s} stat={k} decimals={decimals} totals={props.totals} />
             ))}
           </>
         ) : (
           <td colSpan={cols - 1} className="ev-reason">
-            {REASON[s.status] ?? 'No stats'}
+            {(s.status === 'no-games' && props.noGames) || REASON[s.status] || 'No stats'}
           </td>
         )}
       </tr>
@@ -445,7 +559,7 @@ function RosterPanel(props: {
     <div className="panel">
       <div className="panel-head">
         <h2>Your roster</h2>
-        <SortBasisMenu value={props.sortBasis} onChange={props.onSortBasis} />
+        {!props.totals && <SortBasisMenu value={props.sortBasis} onChange={props.onSortBasis} />}
         <StatGroupToggle group={group} onChange={setGroup} />
       </div>
       {props.emptyRoster ? (
@@ -477,7 +591,13 @@ function RosterPanel(props: {
       <div className="eval-foot">
         {props.footer}
         <p className="small muted ev-legend">
-          <b className="num">{formatAdjusted(decimals === 3 ? 0.875 : 12.34, decimals)}</b> normalized to {props.benchmark.available ? `${props.benchmark.gamesPlayed} GP` : 'the benchmark'} · <span className="num">10</span> actual
+          {props.totals ? (
+            <>Actual {props.seasonText} regular-season totals</>
+          ) : (
+            <>
+              <b className="num">{formatAdjusted(decimals === 3 ? 0.875 : 12.34, decimals)}</b> normalized to {props.benchmark.available ? `${props.benchmark.gamesPlayed} GP` : 'the benchmark'} · <span className="num">10</span> actual
+            </>
+          )}
           {props.goalies.length > 0 && (
             <>
               <br />
@@ -490,9 +610,10 @@ function RosterPanel(props: {
   );
 }
 
-function StatCell({ subject, stat, decimals }: { subject: EvaluatedSubject; stat: StatKey; decimals: number }) {
+function StatCell({ subject, stat, decimals, totals }: { subject: EvaluatedSubject; stat: StatKey; decimals: number; totals: boolean }) {
   const s = subject.stats!;
-  if (!isScaledStat(stat)) return <td className="n">{formatStat(stat, s[stat])}</td>;
+  // Full season: the reported total only (it would be the same number twice).
+  if (!isScaledStat(stat) || totals) return <td className="n">{formatStat(stat, s[stat])}</td>;
   const adj = subject.adjusted?.[stat];
   return (
     <td className="n ev-cell" title={adj !== undefined ? `${LABEL.get(stat)}: ${s[stat]} in ${s.gamesPlayed} GP → ${adj.toFixed(3)}` : undefined}>
@@ -574,6 +695,8 @@ function RankingsPanel(props: {
   teamOf: (nhlId: number, line?: SkaterStatLine) => string;
   sortBasis: SortBasis;
   onSortBasis: (v: SortBasis) => void;
+  /** Full season: actual totals, so there is one value to sort by. */
+  totals: boolean;
 }) {
   const [group, setGroup] = useState<StatGroupId>('all');
   const decimals = adjustedDecimals(props.benchmark.available ? props.benchmark.basis : undefined);
@@ -603,15 +726,15 @@ function RankingsPanel(props: {
       canRank
         ? rankPlayers(props.skaters, {
             stat,
-            benchmarkGp: bm.available ? bm.gamesPlayed : undefined,
+            benchmarkGp: props.totals ? 'own' : bm.available ? bm.gamesPlayed : undefined,
             rosterNhlIds: props.rosterNhlIds,
             minGamesPlayed: props.minGamesPlayed,
             positions: position === 'all' ? undefined : [position],
             direction,
-            sortBy: props.sortBasis,
+            sortBy: props.totals ? 'actual' : props.sortBasis,
           })
         : [],
-    [canRank, props.skaters, stat, bm, props.rosterNhlIds, props.minGamesPlayed, position, direction, props.sortBasis],
+    [canRank, props.skaters, stat, bm, props.rosterNhlIds, props.minGamesPlayed, position, direction, props.sortBasis, props.totals],
   );
   useEffect(() => setShown(PAGE), [stat, position, direction, props.minGamesPlayed, props.sortBasis]);
 
@@ -619,7 +742,7 @@ function RankingsPanel(props: {
     <div className="panel">
       <div className="panel-head">
         <h2>All NHL skaters</h2>
-        <SortBasisMenu value={props.sortBasis} onChange={props.onSortBasis} />
+        {!props.totals && <SortBasisMenu value={props.sortBasis} onChange={props.onSortBasis} />}
         <StatGroupToggle group={group} onChange={setGroup} />
       </div>
       <div className="panel-body rank-controls">
@@ -685,7 +808,7 @@ function RankingsPanel(props: {
                       </th>
                       <td className="n">{r.gamesPlayed}</td>
                       {stats.map((k) => (
-                        <StatCell key={k} subject={subject} stat={k} decimals={decimals} />
+                        <StatCell key={k} subject={subject} stat={k} decimals={decimals} totals={props.totals} />
                       ))}
                     </tr>
                   );
