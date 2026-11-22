@@ -337,9 +337,9 @@ Each rule below is enforced by the code or tests named; keep them true.
   - Triggers: every push (it deploys only when the ref is the repo's **default branch**: `claude/practical-faraday-ti8p02` in the live repo, `main` in the testing repo), plus manual runs and calls from the refresh workflow.
   - Build: `BASE_PATH=/<repo>/ npx vite build`, then uploads **`dist/` only**.
   - Afterwards, `scripts/smoke-test.mjs` checks the live URL in headless Chromium (Playwright 1.56.1, installed in the job; the job runs on `ubuntu-24.04`, see §G 15):
-    - the live data matches the committed snapshot, and Team Schedules (`#rankings`) shows 32 teams in its first table (`.table-wrap`; the Schedule Grid is a second table);
+    - the live data is the committed snapshot or a newer one (2026-11-22: a refresh started by the same push can deploy on top, §G 18), and Team Schedules (`#rankings`) shows 32 teams in its first table (`.table-wrap`; the Schedule Grid is a second table);
     - the data status chip and paste mode as the Roster default;
-    - Upload Image opens and the self-hosted OCR files (`ocr/worker.min.js`, `ocr/eng.traineddata.gz`, a core) are served (OCR is not run);
+    - Upload Image opens and the self-hosted OCR files (`ocr/worker.min.js`, `ocr/eng.traineddata.gz`, a core) are served (OCR is not run; each check is tried up to 3 times, §G 18);
     - the Lineup heading matches `/of \d+ scheduled games fit your lineup/`;
     - the roster persists across a reload;
     - Roster Evaluation loads the published skater stats and shows the roster with a "Normalized to N GP" benchmark; Player Rankings lists the roster player with roster shading; neither changes the saved roster;
@@ -406,6 +406,7 @@ Each rule below is enforced by the code or tests named; keep them true.
 15. **Smoke-test runner pin.** On 2026-10-27, `ubuntu-latest` moved to Ubuntu 26.04, and Playwright 1.56.1 refused to install Chromium there ("does not support chromium on ubuntu26.04-x64"). That failed the deploy smoke test, which the daily refresh also runs. The `smoke-test` job in `deploy-pages.yml` is pinned to `ubuntu-24.04`; the other jobs don't use Playwright and stay on `ubuntu-latest`. Unpin it only together with a Playwright upgrade that supports the newer image.
 16. **Smoke-test waits.** Don't wait for `networkidle` after the app has loaded: gtag can keep a request open, and the persistence `reload` timed out on 2026-10-30. Wait for `domcontentloaded` or `load`, then for a specific element. No smoke-test navigation uses `networkidle`. The first `goto` waits for the rankings rows and the "NHL data" status; the persistence reload waits for the Lineup heading.
 17. **Several open tabs.** Every open page keeps its own copy of the state. Without the `storage` sync, a reset (or any change) in one tab left other tabs stale, and a later change there re-saved the old data. Reproduce by opening two tabs; the smoke test covers it.
+18. **Two deploys from one push (2026-11-22).** A push that touches the data pipeline (`src/data/**`, `scripts/refresh-data.ts`, `refresh-data.yml`) starts both the push's Pages deploy and a data refresh, which commits newer data and deploys again seconds later. The smoke test checks out the branch head when it starts, so it can see either snapshot. Two failures followed: live run 45038101595 (15:25 UTC) lost one OCR `HEAD` request to `ECONNRESET` right after the second deploy, with no retry; testing run 45049394421 (17:26 UTC) checked out before the bot's data commit and waited for an exact `fetchedAt` match the site could no longer show, until the 10-minute job limit cancelled it. In both cases the refresh's own deploy and smoke test passed. Fixed in testing `7471fd7` and promoted here on 2026-11-22 (owner approval; smoke test only): the data check accepts the committed snapshot or a newer one, and the OCR checks retry (3 tries, 5 s apart).
 
 ## H. Open questions and discrepancies
 

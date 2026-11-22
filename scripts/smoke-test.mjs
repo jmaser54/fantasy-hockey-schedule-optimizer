@@ -22,15 +22,17 @@ const fail = (msg) => {
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// 1. The live data must be the snapshot committed in this checkout.
+// 1. The live data must be the snapshot committed in this checkout, or a newer one: a push that
+// touches the data pipeline also starts a refresh, whose deploy can land on top of this one.
 const local = JSON.parse(await readFile('public/data/schedule.json', 'utf8'));
+const atLeastLocal = (d) => Date.parse(d.fetchedAt) >= Date.parse(local.fetchedAt);
 let live;
 for (let attempt = 1; attempt <= 20; attempt++) {
   try {
     const res = await fetch(`${base}data/schedule.json?check=${Date.now()}`, { cache: 'no-store' });
     if (res.ok) {
       live = await res.json();
-      if (live.fetchedAt === local.fetchedAt) break;
+      if (atLeastLocal(live)) break;
       console.log(`attempt ${attempt}: live data ${live.fetchedAt}, expected ${local.fetchedAt}; waiting for CDN…`);
     } else {
       console.log(`attempt ${attempt}: HTTP ${res.status}`);
@@ -40,8 +42,8 @@ for (let attempt = 1; attempt <= 20; attempt++) {
   }
   await sleep(30_000);
 }
-if (!live || live.fetchedAt !== local.fetchedAt) fail('live site does not serve the committed data snapshot');
-console.log(`live data OK: ${live.games.length} games, ${live.teams.length} teams, fetched ${live.fetchedAt}`);
+if (!live || !atLeastLocal(live)) fail('live site does not serve the committed data snapshot (or a newer one)');
+console.log(`live data OK: ${live.games.length} games, ${live.teams.length} teams, fetched ${live.fetchedAt}${live.fetchedAt !== local.fetchedAt ? ` (newer than this checkout's ${local.fetchedAt})` : ''}`);
 
 // 2. Drive the app.
 const browser = await chromium.launch();
@@ -109,9 +111,20 @@ try {
   // Upload Image: the panel opens and the self-hosted OCR engine files are served (OCR itself isn't run here).
   await page.getByRole('tab', { name: 'Upload Image' }).click();
   if (!(await page.getByRole('button', { name: 'Choose Screenshots' }).isVisible())) fail('Upload Image panel did not open');
+  // Retried: one dropped connection (ECONNRESET right after a Pages deploy, 2026-11-22) shouldn't fail the run.
   for (const f of ['worker.min.js', 'eng.traineddata.gz', 'tesseract-core-simd-lstm.wasm.js']) {
-    const res = await fetch(new URL(`ocr/${f}`, base), { method: 'HEAD' });
-    if (!res.ok) fail(`OCR file ocr/${f} not served (HTTP ${res.status})`);
+    let status = 'no response';
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const res = await fetch(new URL(`ocr/${f}`, base), { method: 'HEAD' });
+        status = `HTTP ${res.status}`;
+        if (res.ok) break;
+      } catch (err) {
+        status = err.cause?.code ?? err.message;
+      }
+      if (attempt < 3) await sleep(5_000);
+    }
+    if (!status.startsWith('HTTP 2')) fail(`OCR file ocr/${f} not served (${status})`);
   }
   console.log('upload image OK: panel opens, OCR engine files served');
   await page.getByRole('tab', { name: 'Search Players' }).click();
