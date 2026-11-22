@@ -174,7 +174,7 @@ function benchmarkSource(b: Benchmark): string {
         ? `Roster max isn’t available because none of your rostered skaters have stats yet, so league max is used: the highest GP among all NHL skaters this season (${b.gamesPlayed}).`
         : `League max: the highest GP among all NHL skaters this season (${b.gamesPlayed}).`;
     case 'per-game':
-      return 'Per Game: each counting stat per game played (benchmark 1 GP).';
+      return 'Per game: each counting stat per game played (benchmark 1 GP).';
     case 'roster-max':
       return `Roster max: the highest GP among your rostered skaters with stats (${b.gamesPlayed}${b.name ? `, ${b.name}` : ''}).`;
     case 'player':
