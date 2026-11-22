@@ -6,7 +6,8 @@
  * Checks that the live site serves the data snapshot from this commit (retrying
  * while the Pages CDN catches up), then drives the app in headless Chromium:
  * rankings render, a player can be added, the lineup optimizer produces totals,
- * and nothing logs an error. Exits non-zero on any failure.
+ * the Player Evaluator (current and completed seasons) works, and nothing logs an error.
+ * Exits non-zero on any failure.
  */
 import { readFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
@@ -94,6 +95,135 @@ const until = async (check, msg, ms = 5000) => {
   for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) if (await check()) return;
   fail(msg);
 };
+// ---------------------------------------------------------------------------
+// Historical seasons (Player Evaluator). Completed seasons are static snapshots, so a refresh deploying
+// on top of this one can't change them. Expectations come from the fetched files (who leads in points,
+// a player's GP), never from fixed rankings, values or timestamps.
+
+const evalKey = /\/fantasy-hockey-schedule-optimizer-testing\/$/.test(new URL(base).pathname) ? 'playoff-evaluator-testing:v1' : 'playoff-evaluator:v1';
+/** "20242025" → "2024–25", as the app labels seasons. */
+const seasonLabel = (s) => `${s.slice(0, 4)}–${s.slice(6)}`;
+
+/** The completed seasons listed in HISTORICAL_SEASONS (src/data/format.ts), so this test follows the app. */
+async function historicalSeasons() {
+  const src = await readFile('src/data/format.ts', 'utf8');
+  const list = [...src.matchAll(/season: '(\d{8})', teamGames: (\d+)/g)].map((m) => ({ season: m[1], teamGames: Number(m[2]) }));
+  if (list.length === 0) fail('no HISTORICAL_SEASONS found in src/data/format.ts');
+  return list;
+}
+
+/** Fetch and sanity-check one season's snapshot (retried: one dropped connection shouldn't fail the run). */
+async function fetchSeason({ season, teamGames }) {
+  const url = new URL(`data/skater-stats-${season}.json`, base);
+  let last = 'no response';
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      last = `HTTP ${res.status}`;
+      if (res.ok) {
+        const data = await res.json();
+        if (data.season !== season || data.gameType !== 2 || !Array.isArray(data.skaters)) fail(`${url} is not the ${season} regular-season snapshot`);
+        if (data.skaters.length < 500) fail(`${url} has only ${data.skaters.length} skaters`);
+        const maxGp = Math.max(...data.skaters.map((x) => x.gamesPlayed));
+        if (maxGp < teamGames) fail(`${url} looks incomplete (most GP ${maxGp}, expected ≥ ${teamGames})`);
+        return data;
+      }
+    } catch (err) {
+      last = err.cause?.code ?? err.message;
+    }
+    if (attempt < 3) await sleep(5_000);
+  }
+  fail(`${url} not served (${last})`);
+}
+
+/** Names of the points leaders (ties included) among skaters with at least `minGp` games: Player Rankings' default order. */
+function leaders(skaters, value, minGp = 10) {
+  const pool = skaters.filter((x) => x.gamesPlayed >= minGp);
+  const best = Math.max(...pool.map(value));
+  return new Set(pool.filter((x) => Math.abs(value(x) - best) < 1e-9).map((x) => x.name));
+}
+
+async function checkHistoricalSeasons(rosterSaved) {
+  const seasons = await historicalSeasons();
+  const files = new Map();
+  for (const h of seasons) files.set(h.season, await fetchSeason(h));
+  console.log(`historical data OK: ${seasons.map((h) => `${h.season} (${files.get(h.season).skaters.length} skaters)`).join(', ')}`);
+
+  const select = page.locator('#season-select');
+  const benchSelect = page.locator('#bench-select');
+  const options = async (l) => (await l.locator('option').allTextContents()).map((t) => t.trim());
+  const savedPrefs = () => page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? '{}'), evalKey);
+  const firstRowName = () => page.locator('.rank-table tbody tr').first().locator('.ev-name span').first().innerText();
+  const showSeason = async (season) => {
+    await select.selectOption(season);
+    await page.locator('.eval-head', { hasText: `NHL ${seasonLabel(season)} regular season (final)` }).waitFor({ timeout: 30_000 });
+    await page.locator('.eval-table tbody tr').first().waitFor({ timeout: 30_000 });
+  };
+
+  // Player Rankings (where the evaluator check left off): a new visitor starts on the current season.
+  for (const tab of ['Player Rankings', 'Roster Evaluation']) {
+    await page.getByRole('tab', { name: tab }).click();
+    await select.waitFor({ timeout: 30_000 });
+    const labels = await options(select);
+    for (const h of seasons) if (!labels.includes(seasonLabel(h.season))) fail(`${tab}: season selector lacks ${seasonLabel(h.season)} (${labels.join(', ')})`);
+  }
+  const current = await select.inputValue();
+  if (files.has(current)) fail(`a new visitor starts on ${current}, not the current season`);
+  const currentBench = await benchSelect.inputValue();
+  const currentOptions = await options(benchSelect);
+
+  // Each completed season on Player Rankings: its own data, Full season (totals) and Per game.
+  await page.getByRole('tab', { name: 'Player Rankings' }).click();
+  for (const h of seasons) {
+    const file = files.get(h.season);
+    await showSeason(h.season);
+    const opts = await options(benchSelect);
+    if (opts.join('|') !== 'Full season|Per game') fail(`${h.season}: benchmark options ${opts.join(', ')}`);
+    if ((await benchSelect.inputValue()) !== 'full-season') await benchSelect.selectOption('full-season');
+    if (!/Full-season totals/.test(await page.locator('.bench-main').innerText())) fail(`${h.season}: Full season not shown as season totals`);
+    const top = await firstRowName();
+    if (!leaders(file.skaters, (x) => x.points).has(top)) fail(`${h.season} Full season: ${top} is not the season's points leader in the snapshot`);
+    if (await page.locator('.rank-table tbody tr').first().locator('.ev-cell').count()) fail(`${h.season} Full season: cells show normalized values`);
+    await benchSelect.selectOption('per-game');
+    await page.locator('.bench-main', { hasText: /Normalized to\s*1 GP/ }).waitFor({ timeout: 10_000 });
+    const perGameTop = await firstRowName();
+    if (!leaders(file.skaters, (x) => x.points / x.gamesPlayed).has(perGameTop)) fail(`${h.season} Per game: ${perGameTop} is not the season's points-per-game leader in the snapshot`);
+    const cell = await page.locator('.rank-table tbody tr').first().locator('.ev-cell b').first().innerText();
+    if (!/^\d+\.\d{3}$/.test(cell)) fail(`${h.season} Per game: normalized cell "${cell}"`);
+    console.log(`historical ${seasonLabel(h.season)} OK: Full season leader ${top}; Per game leader ${perGameTop}`);
+  }
+
+  // The last season and Per game are saved and survive a reload.
+  const last = seasons[seasons.length - 1].season;
+  let prefs = await savedPrefs();
+  if (prefs.season !== last || prefs.historicalBasis !== 'per-game') fail(`season preferences not saved: ${JSON.stringify(prefs)}`);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('.eval-head', { hasText: `NHL ${seasonLabel(last)} regular season (final)` }).waitFor({ timeout: 30_000 });
+  if ((await select.inputValue()) !== last || (await benchSelect.inputValue()) !== 'per-game') fail(`after reload: ${await select.inputValue()} / ${await benchSelect.inputValue()}`);
+
+  // Roster Evaluation follows the same season; the roster player's GP is that season's.
+  await page.getByRole('tab', { name: 'Roster Evaluation' }).click();
+  await page.locator('.eval-table tbody tr', { hasText: 'Connor McDavid' }).waitFor({ timeout: 30_000 });
+  if ((await select.inputValue()) !== last) fail(`Roster Evaluation shows ${await select.inputValue()}, not the saved ${last}`);
+  const line = files.get(last).skaters.find((x) => x.name === 'Connor McDavid');
+  const gp = (await page.locator('.eval-table tbody tr', { hasText: 'Connor McDavid' }).locator('td').first().innerText()).trim();
+  if (line ? gp !== String(line.gamesPlayed) : !/No NHL games/.test(await page.locator('.eval-table tbody tr', { hasText: 'Connor McDavid' }).innerText())) {
+    fail(`Roster Evaluation ${last}: McDavid shows "${gp}", snapshot has ${line?.gamesPlayed ?? 'no games'}`);
+  }
+  console.log(`historical persistence OK: ${seasonLabel(last)} and Per game kept after reload, on both pages`);
+
+  // Back to the current season: its own benchmark options and choice, normalized values again.
+  await select.selectOption(current);
+  await page.locator('.bench-main', { hasText: /Normalized to\s*\d+ GP/ }).waitFor({ timeout: 30_000 });
+  if ((await options(benchSelect)).join('|') !== currentOptions.join('|')) fail(`current-season benchmark options changed: ${(await options(benchSelect)).join(', ')}`);
+  if ((await benchSelect.inputValue()) !== currentBench) fail(`current-season benchmark is ${await benchSelect.inputValue()}, was ${currentBench}`);
+  if (await page.locator('.eval-head', { hasText: '(final)' }).count()) fail('current season still labelled as a completed season');
+  prefs = await savedPrefs();
+  if (prefs.season !== null) fail(`returning to the current season saved ${JSON.stringify(prefs.season)}`);
+  if ((await page.evaluate((k) => localStorage.getItem(k), siteKey)) !== rosterSaved) fail('historical seasons changed the saved roster');
+  console.log(`current season restored OK: ${currentOptions.join(', ')}; benchmark ${currentBench}`);
+}
+
 try {
   // Not network idle (gtag can keep a request open): wait for the loaded data instead.
   // Team counts are in the first table on Team Schedules (the Schedule Grid follows).
@@ -159,8 +289,14 @@ try {
   await page.locator('.rank-table tbody tr.roster-row', { hasText: 'Connor McDavid' }).waitFor({ timeout: 30_000 });
   if ((await page.evaluate((k) => localStorage.getItem(k), siteKey)) !== rosterSaved) fail('Player Rankings changed the saved roster');
   console.log(`evaluator OK: "${bench.trim()}"; Player Rankings lists the roster player, shaded`);
+  await checkHistoricalSeasons(rosterSaved);
   await page.getByRole('button', { name: 'Games Optimizer', exact: true }).click();
   if (await page.getByRole('tab', { name: 'Roster Evaluation' }).count()) fail('Player Evaluator destinations still shown in Playoff Planner');
+  for (const tab of ['Roster', 'Lineup']) {
+    await page.getByRole('tab', { name: tab === 'Roster' ? /^Roster(\s*\d+)?$/ : tab }).click();
+    if (await page.locator('#season-select').count()) fail(`season selector shown in the Games Optimizer (${tab})`);
+  }
+  console.log('games optimizer OK: no season selector');
 
   // 3. Reset <period> to Optimal: the screen and saved data update at once, in this tab and in
   // another open tab (which must not keep showing, or later re-save, the old lineup).
