@@ -348,7 +348,7 @@ Each rule below is enforced by the code or tests named; keep them true.
     - GA hits are intercepted, not sent;
     - no browser errors.
 - `probe-nhl-stats.yml`: Player Evaluator investigation only. It runs manually or on pushes to `scripts/probe-nhl-stats.mjs` or the workflow itself, prints an NHL Stats REST report to the job log, and uploads raw responses as the `nhl-stats-probe` artifact. It writes nothing to the repository or the site.
-- `refresh-data.yml`: daily at 10:17 UTC, and on pushes that touch the pipeline. It tests, refreshes, commits `public/data` as `github-actions[bot]` if changed (message "data: refresh NHL schedule, player directory and skater stats"), then calls the deploy.
+- `refresh-data.yml`: four times a day at 02:17, 08:17, 14:17 and 20:17 UTC (changed 2026-11-22 from once daily at 10:17 UTC, which GitHub started 7–10 hours late, so a night's games were missing until the next afternoon; owner report: stale Player Evaluator stats), and on pushes that touch the pipeline. It tests, refreshes, commits `public/data` as `github-actions[bot]` if changed (message "data: refresh NHL schedule, player directory and skater stats"), then calls the deploy.
   - A schedule or player failure still fails the job and writes nothing.
   - A skater-stats failure (fetch, parse, join or validation) keeps the previous `skater-stats.json`, logs the failure to the report and as a job `::warning` annotation, and doesn't block the schedule and player files (**Confirmed** 2026-11-20).
 - **Pushing to the default branch redeploys the live site.** Commit messages containing `[skip ci]` skip push-triggered workflows.

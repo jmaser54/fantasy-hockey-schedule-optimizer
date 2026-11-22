@@ -2,7 +2,11 @@ name: Refresh NHL data
 
 on:
   schedule:
-    - cron: '17 10 * * *' # daily, ~5–6am US Eastern (runs on the default branch)
+    # Four times a day (UTC): GitHub often starts scheduled runs hours late or skips
+    # them, so one daily run could leave stats a full day behind. 08:17 UTC (~3am
+    # Eastern) picks up the previous night's games; the others are catch-ups.
+    # Runs on the default branch.
+    - cron: '17 2,8,14,20 * * *'
   workflow_dispatch:
   push:
     paths:
