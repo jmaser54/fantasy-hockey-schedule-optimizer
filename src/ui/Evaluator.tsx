@@ -233,7 +233,7 @@ function BenchmarkBar(props: { benchmark: Benchmark; choice: BenchmarkChoice; co
         <select id="bench-select" value={value} onChange={(e) => select(e.target.value)}>
           <option value="league-max">League max</option>
           <option value="roster-max">Roster max</option>
-          <option value="per-game">Per Game</option>
+          <option value="per-game">Per game</option>
           {players.map((p) => (
             <option key={p.nhlId} value={`p:${p.nhlId}`}>
               {p.name} ({p.stats!.gamesPlayed} GP)
