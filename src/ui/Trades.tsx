@@ -1,3 +1,4 @@
+import { isLeagueComplete } from '../domain/league.ts';
 import { useMemo } from 'react';
 import { optimizeDates } from '../domain/optimizer.ts';
 import { describeIssue, toLineupPlayers, validateRoster } from '../domain/roster.ts';
@@ -13,7 +14,7 @@ import { Delta, InfoTip, PlayerSearch, PosBadges } from './common.tsx';
  * "Update Roster", after the user confirms the listed changes.
  */
 export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
-  const { state, dispatch, resolve, data, windows, selected, summarizeWindow, toast } = useApp();
+  const { state, dispatch, resolve, data, windows, selected, summarizeWindow, toast, openSettings } = useApp();
   const scenario = state.scenario;
   const proposed = useMemo(() => proposedRoster(state), [state]);
 
@@ -39,6 +40,19 @@ export function TradesView({ onGoRoster }: { onGoRoster: () => void }) {
         <div style={{ marginTop: 8 }}>
           <button className="btn primary" onClick={onGoRoster}>
             Add Players
+          </button>
+        </div>
+      </div>
+    );
+  }
+  // Incomplete league (new users, 2026-11-26): comparisons need the league's lineup slots.
+  if (!isLeagueComplete(state.league)) {
+    return (
+      <div className="panel empty">
+        <strong>Complete your league settings first</strong>
+        <div style={{ marginTop: 8 }}>
+          <button className="btn primary" onClick={openSettings}>
+            League Settings
           </button>
         </div>
       </div>

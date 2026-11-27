@@ -1,17 +1,25 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { formatShort, weekday } from '../domain/dates.ts';
 import { isLightNight, rankTeams } from '../domain/rankings.ts';
 import { opponent } from '../domain/schedule.ts';
-import { gridCell, matchupsOn, nextSort, rosterPlayersByTeam, sortTeamRows, type RosteredPlayer, type SortState, type TeamRow } from '../domain/teamSchedules.ts';
+import { formatRosterList, gridCell, matchupsOn, nextSort, rosterPlayersByTeam, sortTeamRows, type RosteredPlayer, type SortState, type TeamRow } from '../domain/teamSchedules.ts';
 import type { ISODate, TeamId } from '../domain/types.ts';
 import { useApp, type Window } from './context.ts';
-import { PosBadges } from './common.tsx';
+import { StickyHeadTable } from './StickyHead.tsx';
 
-/** Team Schedules page: Games per Night, NHL Team Schedules and the Schedule Grid, all governed by the selected date range. */
+/** Schedules tab: Games per Night and the NHL Team Schedules table, governed by the selected date range. */
 export function RankingsView({ onGoRoster }: { onGoRoster: () => void }) {
   return (
     <div className="stack">
       <TeamRankings onGoRoster={onGoRoster} />
+    </div>
+  );
+}
+
+/** Grid tab: the Schedule Grid, governed by the selected date range (its own tab since 2026-11-24). */
+export function GridView() {
+  return (
+    <div className="stack">
       <ScheduleGrid />
     </div>
   );
@@ -108,24 +116,23 @@ function TeamRankings({ onGoRoster }: { onGoRoster: () => void }) {
       <section className="panel">
         <div className="panel-head">
           <h2>NHL Team Schedules</h2>
-          <span className="small muted">
-            {selected.name}, {formatShort(selected.start)} – {formatShort(selected.end)}. Click a team to view game dates.
-          </span>
         </div>
-        <div className="table-wrap">
-          <table className={selected.id === 'week' ? 'next-week' : undefined}>
-            <thead>
+        <StickyHeadTable
+          tableClass={`team-table ${selected.id === 'week' ? 'next-week' : ''}`}
+          scrollClass="table-wrap"
+          head={
               <tr>
                 <th className="n">#</th>
                 {sortTh('team', 'Team', 'Team name')}
                 {gameCols.map((c) => (
-                  <Fragment key={c.key}>{sortTh(c.key, c.label, c.title, c.key === 'games' ? 'col-selected' : '')}</Fragment>
+                  <Fragment key={c.key}>{sortTh(c.key, c.label, c.title)}</Fragment>
                 ))}
                 {sortTh('light', 'Light-Night Games', `Games on nights with 8 or fewer NHL games, in ${selected.name}. Those games compete with fewer of your other players for lineup spots`)}
                 {summaryCol && sortTh(summaryCol.key, summaryCol.label, summaryCol.title, 'summary-col')}
                 {sortTh('mine', 'Your Players', 'Players on your roster from this team. Click a count to see them')}
               </tr>
-            </thead>
+          }
+        >
             <tbody>
               {sorted.map((r, idx) => {
                 const players = byTeam.get(r.team) ?? [];
@@ -137,6 +144,26 @@ function TeamRankings({ onGoRoster }: { onGoRoster: () => void }) {
                         <div className="team-cell">
                           <span className="team-abbr">{r.team}</span>
                           <span className="muted small">{data.teams.find((t) => t.id === r.team)?.name}</span>
+                          {/* Expansion cue (2026-11-26): the whole row still toggles; this is its accessible control. */}
+                          {(() => {
+                            const open = expanded?.team === r.team && expanded.kind === 'games';
+                            return (
+                              <button
+                                type="button"
+                                className={`team-chev ${open ? 'open' : ''}`}
+                                aria-expanded={open}
+                                aria-label={`${open ? 'Hide' : 'Show'} ${r.team} game dates`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggle(r.team, 'games');
+                                }}
+                              >
+                                <svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true">
+                                  <path d="M3.5 6 8 10.5 12.5 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              </button>
+                            );
+                          })()}
                         </div>
                       </td>
                       {gameCols.map((c) => (
@@ -147,23 +174,7 @@ function TeamRankings({ onGoRoster }: { onGoRoster: () => void }) {
                       <td className="n">{r.values.light}</td>
                       {summaryCol && <td className="n summary-col">{r.values.summary}</td>}
                       <td className="n">
-                        {players.length > 0 ? (
-                          <button
-                            className="mine-btn"
-                            aria-expanded={expanded?.team === r.team && expanded.kind === 'players'}
-                            aria-label={`${players.length} of your players on ${r.team}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggle(r.team, 'players');
-                            }}
-                          >
-                            <span className="mine-dot" /> {players.length}
-                          </button>
-                        ) : (
-                          <span className="muted" title="None of your players">
-                            –
-                          </span>
-                        )}
+                        <MinePill team={r.team} count={players.length} open={expanded?.team === r.team && expanded.kind === 'players'} onToggle={() => toggle(r.team, 'players')} />
                       </td>
                     </tr>
                     {expanded?.team === r.team && (
@@ -176,39 +187,36 @@ function TeamRankings({ onGoRoster }: { onGoRoster: () => void }) {
                 );
               })}
             </tbody>
-          </table>
-        </div>
+        </StickyHeadTable>
       </section>
     </>
   );
 }
 
-/** Shortcut to the Roster tab: an invitation before a roster exists, its size after. */
+/** Invitation to My Team › My Roster before a roster exists; nothing once it has players (that tab shows the count). */
 function RosterPill({ onGoRoster }: { onGoRoster: () => void }) {
   const { state } = useApp();
-  const n = state.roster.length;
-  if (n === 0) {
-    return (
-      <button type="button" className="roster-pill" onClick={onGoRoster}>
-        + Add your roster
-      </button>
-    );
-  }
+  if (state.roster.length > 0) return null;
   return (
-    <span className="roster-pill has">
-      Roster: {n} {n === 1 ? 'player' : 'players'}
-      <button type="button" className="link-btn" onClick={onGoRoster}>
-        Edit
-      </button>
-    </span>
+    <button type="button" className="roster-pill" onClick={onGoRoster}>
+      + Add your roster
+    </button>
   );
 }
 
 /** League-wide games per night in the selected range; each bar reveals that night's matchups on demand. */
 function GamesPerNight() {
   const { data, selected } = useApp();
-  const [hover, setHover] = useState<ISODate | null>(null);
+  // Hover (mouse) and keyboard focus show a floating tooltip only, so nothing moves; a click or tap
+  // pins the night and opens its matchups below the chart (2026-11-26).
+  const [tip, setTip] = useState<{ d: ISODate; x: number } | null>(null);
   const [pinned, setPinned] = useState<ISODate | null>(null);
+  const strip = useRef<HTMLDivElement>(null);
+  const showTip = (d: ISODate, el: HTMLElement) => {
+    const s = strip.current;
+    if (!s) return;
+    setTip({ d, x: el.offsetLeft - s.scrollLeft + el.offsetWidth / 2 });
+  };
   useEffect(() => {
     if (pinned && !selected.dates.includes(pinned)) setPinned(null);
   }, [selected, pinned]);
@@ -221,8 +229,10 @@ function GamesPerNight() {
   const nights = selected.dates.map((d) => ({ d, n: data.schedule.gamesOn(d).length }));
   const maxNight = Math.max(1, ...nights.map((x) => x.n));
   const lightCount = nights.filter((x) => isLightNight(x.n, data.teams.length)).length;
-  const active = pinned ?? hover;
+  const active = pinned;
   const matchups = active ? matchupsOn(data.schedule, active) : [];
+  const tipNight = tip && nights.find((x) => x.d === tip.d);
+  const wrapW = strip.current?.clientWidth ?? 0;
 
   return (
     <section className="panel">
@@ -236,7 +246,17 @@ function GamesPerNight() {
         </span>
       </div>
       <div className="panel-body" style={{ paddingTop: 6, paddingBottom: 6 }}>
-        <div className="strip" aria-label="NHL games per date">
+        <div className="strip-wrap">
+        {tip && tipNight && (
+          <div
+            className="strip-tip"
+            aria-hidden="true"
+            style={{ left: tip.x, transform: `translateX(${tip.x < 60 ? '-15%' : wrapW && tip.x > wrapW - 60 ? '-85%' : '-50%'})` }}
+          >
+            {weekday(tip.d)} {formatShort(tip.d)} · {tipNight.n} {tipNight.n === 1 ? 'game' : 'games'}
+          </div>
+        )}
+        <div ref={strip} className={`strip ${pinned ? 'has-pinned' : ''}`} aria-label="NHL games per date" onScroll={() => setTip(null)}>
           {nights.map(({ d, n }) => (
             <button
               key={d}
@@ -244,16 +264,17 @@ function GamesPerNight() {
               className={`bar-col ${active === d ? 'active' : ''}`}
               aria-label={`${weekday(d)} ${formatShort(d)}: ${n} games. Show matchups.`}
               aria-pressed={pinned === d}
-              onMouseEnter={() => setHover(d)}
-              onMouseLeave={() => setHover(null)}
-              onFocus={() => setHover(d)}
-              onBlur={() => setHover(null)}
+              onPointerEnter={(e) => e.pointerType === 'mouse' && showTip(d, e.currentTarget)}
+              onPointerLeave={() => setTip(null)}
+              onFocus={(e) => e.currentTarget.matches(':focus-visible') && showTip(d, e.currentTarget)}
+              onBlur={() => setTip(null)}
               onClick={() => setPinned(pinned === d ? null : d)}
             >
               <div className={`bar ${isLightNight(n, data.teams.length) ? 'light' : ''}`} style={{ height: `${(n / maxNight) * 44}px` }} />
               <span className="lbl">{d.slice(8).replace(/^0/, '')}</span>
             </button>
           ))}
+        </div>
         </div>
         <div className="night-detail" aria-live="polite">
           {active ? (
@@ -269,15 +290,11 @@ function GamesPerNight() {
                 ))}
                 {matchups.length === 0 && <span className="muted">No NHL games.</span>}
               </span>
-              {pinned && (
-                <button className="icon-btn" aria-label="Close matchups" onClick={() => setPinned(null)}>
-                  ✕
-                </button>
-              )}
+              <button className="icon-btn" aria-label="Close matchups" onClick={() => setPinned(null)}>
+                ✕
+              </button>
             </>
-          ) : (
-            <span className="muted">Hover or tap a bar to see that night’s matchups.</span>
-          )}
+          ) : null}
         </div>
       </div>
     </section>
@@ -304,33 +321,57 @@ function TeamGames({ team }: { team: string }) {
   );
 }
 
+/** Blue-dot count of your players on a team; toggles their list. Shared by Team Schedules and the Grid (2026-11-26). */
+function MinePill({ team, count, open, onToggle }: { team: TeamId; count: number; open: boolean; onToggle: () => void }) {
+  if (count === 0)
+    return (
+      <span className="muted" title="None of your players">
+        –
+      </span>
+    );
+  return (
+    <button
+      className="mine-btn"
+      aria-expanded={open}
+      aria-label={`${count} of your players on ${team}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+    >
+      <span className="mine-dot" /> {count}
+    </button>
+  );
+}
+
+/** The team's rostered players as one compact line, e.g. "Leo Carlsson (C), Lukas Dostal (G)" (no heading). */
 function TeamPlayers({ team, players }: { team: TeamId; players: RosteredPlayer[] }) {
   return (
-    <div className="team-players">
-      <b>
-        Your Players on {team} ({players.length})
-      </b>
-      {players.map((p) => (
-        <span key={p.id} className="team-player">
-          {p.name} <PosBadges positions={p.positions} />
-          {p.onIr && <span className="badge">IR</span>}
-        </span>
-      ))}
+    <div className="team-players" aria-label={`Your players on ${team}`}>
+      {formatRosterList(players)}
     </div>
   );
 }
+
+/** The Grid's default order: most games first (ties A→Z by team, `sortTeamRows`). */
+export const GRID_DEFAULT_SORT: SortState = { key: 'games', dir: 'desc' };
 
 /** Team-by-date matrix for the selected range: opponent on game days, blank on off-days. */
 function ScheduleGrid() {
   const { data, selected } = useApp();
   const gamesIn = useGamesInWindow();
   const byTeam = useRosterByTeam();
-  const [sort, setSort] = useState<SortState>({ key: 'team', dir: 'asc' });
+  // Default (2026-11-26): most games in the selected period first, ties A→Z by team; recomputed for each period.
+  // A column the user picks (Team, Your Players, Games) stays selected while they use the Grid.
+  const [sort, setSort] = useState<SortState>(GRID_DEFAULT_SORT);
+  const [openTeam, setOpenTeam] = useState<TeamId | null>(null);
+  // "mine" sorts on the number of your players on the team (numeric), like Team Schedules.
   const rows = sortTeamRows(
-    data.teams.map((t) => ({ team: t.id, values: { games: gamesIn(t.id, selected) } })),
+    data.teams.map((t) => ({ team: t.id, values: { games: gamesIn(t.id, selected), mine: byTeam.get(t.id)?.length ?? 0 } })),
     sort,
     ['games'],
   );
+  const cols = selected.dates.length + 3;
   const head = (key: string, label: string, cls: string) => (
     <th
       className={`sortable ${cls} ${sort.key === key ? 'active' : ''}`}
@@ -350,9 +391,11 @@ function ScheduleGrid() {
           {selected.name}, {formatShort(selected.start)} – {formatShort(selected.end)}
         </span>
       </div>
-      <div className="grid-wrap">
-        <table className="sgrid">
-          <thead>
+      <StickyHeadTable
+        tableClass="sgrid"
+        scrollClass="grid-wrap"
+        head={
+          <>
             <tr className="nightly">
               <th className="sticky" title="NHL games scheduled league-wide on each date">
                 NHL Games
@@ -362,6 +405,7 @@ function ScheduleGrid() {
                   {data.schedule.gamesOn(d).length}
                 </th>
               ))}
+              <th />
               <th />
             </tr>
             <tr>
@@ -377,12 +421,16 @@ function ScheduleGrid() {
                   {formatShort(d).replace(' ', ' ')}
                 </th>
               ))}
+              {head('mine', 'Your Players', 'sg-mine')}
               {head('games', 'Games', 'n')}
             </tr>
-          </thead>
+          </>
+        }
+      >
           <tbody>
             {rows.map((r) => (
-              <tr key={r.team}>
+              <Fragment key={r.team}>
+              <tr>
                 <th className="sticky" scope="row" title={data.teams.find((t) => t.id === r.team)?.name}>
                   {r.team} {byTeam.get(r.team)?.length ? <span className="mine-dot" title="You have players on this team" /> : null}
                 </th>
@@ -398,12 +446,25 @@ function ScheduleGrid() {
                     </td>
                   );
                 })}
+                {/* Your players on this team: the same blue-dot count and expanded list as Team Schedules (2026-11-26). */}
+                <td className="sg-mine">
+                  <MinePill team={r.team} count={r.values.mine ?? 0} open={openTeam === r.team} onToggle={() => setOpenTeam(openTeam === r.team ? null : r.team)} />
+                </td>
                 <td className="n">{r.values.games}</td>
               </tr>
+              {openTeam === r.team && (
+                <tr className="expand-row sg-expand">
+                  <td colSpan={cols}>
+                    <div className="sg-expand-in">
+                      <TeamPlayers team={r.team} players={byTeam.get(r.team) ?? []} />
+                    </div>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
           </tbody>
-        </table>
-      </div>
+      </StickyHeadTable>
     </section>
   );
 }

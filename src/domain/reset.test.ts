@@ -48,7 +48,10 @@ describe('Reset <period> to Optimal', () => {
     const after = days(st).get('2026-11-17')!;
     expect(after.manual).toBe(false);
     expect(after.seats.find((x) => x.playerId === 'carlsson')).toBeDefined();
-    expect(after.seats.find((x) => x.playerId === 'mackinnon')).toBeUndefined();
+    // Since 2026-11-24 the automatic lineup fills empty seats with players without a game: MacKinnon may
+    // sit in one, but never in Carlsson's place, and adds no game.
+    expect(after.seats.find((x) => x.seat.key === carlssonSeat)!.playerId).toBe('carlsson');
+    expect(after.players.find((x) => x.playerId === 'mackinnon')!.game).toBeUndefined();
     expect(after.usable).toBe(after.optimalUsable);
     expect(lineup(after)).toEqual(lineup(auto.get('2026-11-17')!));
   });

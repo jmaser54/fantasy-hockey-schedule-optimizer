@@ -91,3 +91,16 @@ export function rosterPlayersByTeam(
   for (const list of out.values()) list.sort((a, b) => a.name.localeCompare(b.name));
   return out;
 }
+
+/** One rostered player with eligible positions (and IR) in parentheses: "Leo Carlsson (C)", "Player Name (C, RW [IR])". */
+export function formatRosteredPlayer(p: RosteredPlayer): string {
+  return `${p.name} (${p.positions.join(', ')}${p.onIr ? ' [IR]' : ''})`;
+}
+
+/**
+ * A team's rostered players as one compact line (2026-11-26, revised): "Leo Carlsson (C), Lukas Dostal (G)".
+ * Used for the expanded "Your Players" rows in Team Schedules and the Grid.
+ */
+export function formatRosterList(players: readonly RosteredPlayer[]): string {
+  return players.map(formatRosteredPlayer).join(', ');
+}

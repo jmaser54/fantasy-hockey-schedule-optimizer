@@ -50,7 +50,7 @@ describe('searchSkaters', () => {
   });
 });
 
-describe('Roster Evaluation row order', () => {
+describe('My Players (Roster Evaluation) row order', () => {
   const r = (id: number, position: SkaterStatLine['position'], source: 'roster' | 'comparison', goals = 1, status = 'ok') =>
     ({ id, source, status, stats: status === 'ok' ? ({ nhlId: id, position, goals, plusMinus: goals } as SkaterStatLine) : undefined, adjusted: status === 'ok' ? { goals } : null }) as const;
   const roster = [r(1, 'C', 'roster', 5), r(2, 'L', 'roster', 9), r(3, 'D', 'roster', 2), r(4, 'C', 'roster', 0, 'unmatched'), r(5, 'D', 'roster', 7)];

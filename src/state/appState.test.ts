@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { optimizeRange } from '../domain/optimizer.ts';
+import { expandSeats, optimizeRange } from '../domain/optimizer.ts';
 import { toLineupPlayers, validateRoster } from '../domain/roster.ts';
-import { DEFAULT_LEAGUE } from '../domain/league.ts';
+import { DEFAULT_LEAGUE, DEFAULT_PERIODS, isLeagueComplete, validateLeague } from '../domain/league.ts';
 import { player as lp, sched, slots } from '../domain/testUtils.ts';
-import type { Player } from '../domain/types.ts';
-import { STORAGE_KEY, deserialize, initialState, proposedRoster, reducer, serialize, storageKeyFor, type AppState } from './appState.ts';
+import type { LeagueConfig, Player } from '../domain/types.ts';
+import { STORAGE_KEY, deserialize, initialState, proposedRoster, reducer, serialize, setupNeeds, storageKeyFor, type AppState } from './appState.ts';
 
 const P = (id: string, team: string, positions: Player['positions'] = ['C']): Player => ({ id, name: id, team, positions, eligibilitySource: 'nhl' });
 
@@ -92,7 +92,8 @@ describe('persistence (spec case 12)', () => {
     const bad = JSON.stringify({ roster: [{ playerId: 'x', onIr: true }, { nope: 1 }, { playerId: 'x' }], league: { slots: 'broken' }, periods: [{ id: 'r1', name: 'R1', start: '2027-02-30', end: '2027-03-01' }] });
     const { state, notice } = deserialize(bad);
     expect(state.roster).toEqual([{ playerId: 'x', onIr: true }]);
-    expect(state.league).toEqual(initialState().league);
+    // Saved data = an existing user: an unreadable league falls back to the standard defaults, not to blank.
+    expect(state.league).toEqual(DEFAULT_LEAGUE);
     expect(state.periods).toEqual(initialState().periods);
     expect(notice).toMatch(/league settings and playoff dates/);
   });
@@ -112,7 +113,7 @@ describe('persistence (spec case 12)', () => {
   it('loads saves from before IR simplification: the old injured mark and IR rule are dropped, everything else is kept', () => {
     const legacy = {
       version: 1,
-      league: { rosterSize: 18, irSlots: 3, irEligibility: 'injured', slots: initialState().league.slots },
+      league: { rosterSize: 18, irSlots: 3, irEligibility: 'injured', slots: DEFAULT_LEAGUE.slots },
       selection: 'all',
       roster: [
         { playerId: 'a', onIr: false, preferred: true, positionsOverride: ['C', 'LW'] },
@@ -125,7 +126,7 @@ describe('persistence (spec case 12)', () => {
     };
     const { state, notice } = deserialize(JSON.stringify(legacy));
     expect(notice).toBeUndefined();
-    expect(state.league).toEqual({ rosterSize: 18, irSlots: 3, slots: initialState().league.slots });
+    expect(state.league).toEqual({ rosterSize: 18, irSlots: 3, slots: DEFAULT_LEAGUE.slots });
     expect(state.roster).toEqual([
       { playerId: 'a', onIr: false, preferred: true, positionsOverride: ['C', 'LW'] },
       { playerId: 'b', onIr: true },
@@ -237,5 +238,86 @@ describe('storage key per site', () => {
     expect(storageKeyFor('/')).toBe('playoff-optimizer:v1');
     expect(storageKeyFor('/fantasy-hockey-schedule-optimizer-testing/')).toBe('playoff-optimizer-testing:v1');
     expect(STORAGE_KEY).toBe('playoff-optimizer:v1'); // tests run with the default base
+  });
+});
+
+describe('new-user league setup and completion marks (2026-11-26)', () => {
+  const complete = (l: LeagueConfig) => validateLeague(l).length === 0;
+
+  it('a new user starts with blank roster size, IR slots and slot counts, but the default playoff rounds', () => {
+    const s = initialState();
+    expect(Number.isNaN(s.league.rosterSize)).toBe(true);
+    expect(Number.isNaN(s.league.irSlots)).toBe(true);
+    expect(s.league.slots.map((x) => x.id)).toEqual(DEFAULT_LEAGUE.slots.map((x) => x.id));
+    expect(s.league.slots.every((x) => Number.isNaN(x.count))).toBe(true);
+    expect(s.league.slots.map((x) => x.accepts)).toEqual(DEFAULT_LEAGUE.slots.map((x) => x.accepts));
+    expect(s.periods).toEqual(DEFAULT_PERIODS);
+    expect(s.selection).toBe(DEFAULT_PERIODS[0]!.id);
+    expect(isLeagueComplete(s.league)).toBe(false);
+    expect(validateLeague(s.league, { allowBlank: true })).toEqual([]);
+  });
+
+  it('a blank or partly filled league survives a reload as is, with no reset notice', () => {
+    let s = initialState();
+    s = reducer(s, { type: 'setLeague', league: { ...s.league, rosterSize: 18, slots: s.league.slots.map((x) => (x.id === 'C' ? { ...x, count: 3 } : x)) } });
+    const raw = serialize(s);
+    expect(raw).toContain('"irSlots":null');
+    const { state, notice } = deserialize(raw);
+    expect(notice).toBeUndefined();
+    expect(state.league.rosterSize).toBe(18);
+    expect(Number.isNaN(state.league.irSlots)).toBe(true);
+    expect(state.league.slots.find((x) => x.id === 'C')!.count).toBe(3);
+    expect(Number.isNaN(state.league.slots.find((x) => x.id === 'G')!.count)).toBe(true);
+  });
+
+  it("an existing user's saved league and roster load untouched (never replaced by the blank league)", () => {
+    const saved = {
+      version: 1,
+      league: { rosterSize: 16, irSlots: 1, slots: [{ id: 'F', label: 'F', count: 6, accepts: ['C', 'LW', 'RW'] }, { id: 'G', label: 'G', count: 1, accepts: ['G'] }] },
+      periods: [{ id: 'p1', name: 'Week A', start: '2027-03-01', end: '2027-03-07' }],
+      selection: 'p1',
+      roster: [{ playerId: 'a', onIr: false }],
+    };
+    const { state, notice } = deserialize(JSON.stringify(saved));
+    expect(notice).toBeUndefined();
+    expect(state.league).toEqual(saved.league);
+    expect(state.periods).toEqual(saved.periods);
+    expect(state.roster).toEqual(saved.roster);
+    expect(setupNeeds(state)).toEqual({ league: false, roster: false });
+    // A save made before this change (standard defaults) stays the standard defaults.
+    const old = deserialize(JSON.stringify({ league: DEFAULT_LEAGUE, roster: [] })).state;
+    expect(old.league).toEqual(DEFAULT_LEAGUE);
+    expect(setupNeeds(old)).toEqual({ league: false, roster: true });
+  });
+
+  it('invalid saved values are still rejected (a missing field is not treated as blank)', () => {
+    const { rosterSize: _omit, ...noSize } = DEFAULT_LEAGUE;
+    expect(deserialize(JSON.stringify({ league: noSize })).state.league).toEqual(DEFAULT_LEAGUE);
+    expect(deserialize(JSON.stringify({ league: { ...DEFAULT_LEAGUE, irSlots: -1 } })).notice).toMatch(/league settings/);
+  });
+
+  it('the two marks clear independently, only by completing their own section', () => {
+    let s = initialState();
+    expect(setupNeeds(s)).toEqual({ league: true, roster: true });
+    s = reducer(s, { type: 'addPlayers', ids: ['a'] });
+    expect(setupNeeds(s)).toEqual({ league: true, roster: false });
+    // Partly filled is not complete.
+    s = reducer(s, { type: 'setLeague', league: { ...s.league, rosterSize: 20, irSlots: 2 } });
+    expect(setupNeeds(s).league).toBe(true);
+    s = reducer(s, { type: 'setLeague', league: DEFAULT_LEAGUE });
+    expect(setupNeeds(s)).toEqual({ league: false, roster: false });
+    // League first, roster still marked.
+    let t = reducer(initialState(), { type: 'setLeague', league: DEFAULT_LEAGUE });
+    expect(setupNeeds(t)).toEqual({ league: false, roster: true });
+    t = reducer(t, { type: 'addPlayers', ids: ['a'] });
+    t = reducer(t, { type: 'clearRoster' });
+    expect(setupNeeds(t)).toEqual({ league: false, roster: true });
+    expect(complete(t.league)).toBe(true);
+  });
+
+  it('an incomplete league yields no lineup seats and no roster-limit warnings', () => {
+    const s = initialState();
+    expect(expandSeats(s.league.slots)).toEqual([]);
+    expect(validateRoster([{ playerId: 'a', onIr: false }, { playerId: 'b', onIr: true }], new Map([['a', P('a', 'TOR')], ['b', P('b', 'TOR')]]), s.league)).toEqual([]);
   });
 });

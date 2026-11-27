@@ -16,6 +16,17 @@ export const DEFAULT_LEAGUE: LeagueConfig = {
   slots: DEFAULT_SLOTS,
 };
 
+/**
+ * A genuinely new user's league (2026-11-26): the same slots, but roster size, IR slots and every
+ * slot count left blank (NaN, shown as an empty field) for the user to fill in. "Restore Defaults"
+ * in League Settings still fills DEFAULT_LEAGUE. Saved data is never replaced by this.
+ */
+export const NEW_USER_LEAGUE: LeagueConfig = {
+  rosterSize: NaN,
+  irSlots: NaN,
+  slots: DEFAULT_SLOTS.map((s) => ({ ...s, count: NaN })),
+};
+
 export const DEFAULT_PERIODS: Period[] = [
   { id: 'r1', name: 'Round 1', start: '2027-02-22', end: '2027-03-07' },
   { id: 'r2', name: 'Round 2', start: '2027-03-08', end: '2027-03-21' },
@@ -26,17 +37,22 @@ export function activeSlotCount(league: LeagueConfig): number {
   return league.slots.reduce((n, s) => n + s.count, 0);
 }
 
-/** Problems that make a league config unusable. Empty array = valid. */
-export function validateLeague(league: LeagueConfig): string[] {
+/**
+ * Problems that make a league config unusable. Empty array = valid.
+ * With `allowBlank`, blank numbers (NaN) are not errors: League Settings and saved data may hold an
+ * incomplete league; only a complete one (`isLeagueComplete`) is used for lineups.
+ */
+export function validateLeague(league: LeagueConfig, opts: { allowBlank?: boolean } = {}): string[] {
   const errors: string[] = [];
-  if (!Number.isInteger(league.rosterSize) || league.rosterSize < 1) errors.push('Roster size must be at least 1.');
-  if (!Number.isInteger(league.irSlots) || league.irSlots < 0) errors.push('IR slots cannot be negative.');
+  const blank = (n: number) => !!opts.allowBlank && Number.isNaN(n);
+  if (!blank(league.rosterSize) && (!Number.isInteger(league.rosterSize) || league.rosterSize < 1)) errors.push('Roster size must be at least 1.');
+  if (!blank(league.irSlots) && (!Number.isInteger(league.irSlots) || league.irSlots < 0)) errors.push('IR slots cannot be negative.');
   const ids = new Set<string>();
   for (const s of league.slots) {
     if (!s.label.trim()) errors.push('Every lineup slot needs a name.');
     if (ids.has(s.id)) errors.push(`Duplicate slot id ${s.id}.`);
     ids.add(s.id);
-    if (!Number.isInteger(s.count) || s.count < 0) errors.push(`${s.label}: count must be 0 or more.`);
+    if (!blank(s.count) && (!Number.isInteger(s.count) || s.count < 0)) errors.push(`${s.label}: count must be 0 or more.`);
     if (s.count > 0 && s.accepts.length === 0) errors.push(`${s.label}: accepts no positions.`);
     if (s.accepts.some((p) => !POSITIONS.includes(p))) errors.push(`${s.label}: unknown position.`);
   }
@@ -44,6 +60,11 @@ export function validateLeague(league: LeagueConfig): string[] {
     errors.push('Active lineup slots exceed roster size.');
   }
   return errors;
+}
+
+/** Every required league field is filled with a valid value (roster size, IR slots, every slot count). */
+export function isLeagueComplete(league: LeagueConfig): boolean {
+  return validateLeague(league).length === 0;
 }
 
 export function validatePeriod(p: Period): string | null {

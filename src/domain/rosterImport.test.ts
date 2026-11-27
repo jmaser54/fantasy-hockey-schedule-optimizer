@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildPlayerIndex, extractRosterNames, matchName, parseRosterText, searchPlayers } from './rosterImport.ts';
+import { normalizeName } from './names.ts';
 import type { Player } from './types.ts';
 
 const P = (id: string, name: string, team: string, positions: Player['positions'] = ['C']): Player => ({
@@ -174,6 +175,97 @@ describe('extractRosterNames (whole roster pages, pasted or from screenshots)', 
     }
     // Only names that have an umlaut get this tolerance.
     expect(extractRosterNames('Mitch Mirner', index, teams).matched).toEqual([]);
+  });
+
+  it('screenshot noise around an initial (2026-11-27): "§" for S, junk glued to it, a comma for its dot', () => {
+    const more = buildPlayerIndex([...players, P('10', 'Shayne Gostisbehere', 'CAR', ['D'])]);
+    const t = new Set([...teams, 'CAR']);
+    // The OCR lines seen for an ESPN roster screenshot ("S. Gostisbehere", "T. Stutzle").
+    for (const [line, id] of [
+      ['D 2 §. Gostisbehere DTD', '10'],
+      ['co §. Gostisbehere', '10'],
+      ['$. Gostisbehere Car D', '10'],
+      ['D 2 $: Gostisbehere DTD', '10'],
+      ['Co S-Gostisbehere', '10'],
+      ['D Co S-Gostisbehere Car D', '10'],
+      ['T-Stutzle', '4'],
+      ['C T-Stutzle Ott C, LW', '4'],
+      ['T-Stiitzle', '4'],
+      ['coS. Gostisbehere', '10'],
+      ['co S. Gostisbehere', '10'],
+      ['S, Gostisbehere CAR', '10'],
+      ['c¢ T. Stutzle', '4'],
+      ['cT. Stutzle Ott', '4'],
+      ['T, Stutzle Ott C, LW', '4'],
+    ] as const) {
+      expect([line, ids(extractRosterNames(line, more, t).matched)]).toEqual([line, [id]]);
+    }
+    // Not looser than before: the rest must still name exactly one player, and "$" is S only before ". Name".
+    const two = extractRosterNames('coE. Pettersson VAN', more, t);
+    expect([two.matched, two.review[0]!.result.status]).toEqual([[], 'ambiguous']);
+    expect(extractRosterNames('Price $. 5\nCost $.99 Gostisbehere', more, t).matched).toEqual([]);
+    // Real hyphenated names are untouched by the hyphen-initial rule.
+    const hy = buildPlayerIndex([...players, P('13', 'Oliver Ekman-Larsson', 'TOR', ['D']), P('14', 'Jean-Gabriel Pageau', 'NYI')]);
+    expect(ids(extractRosterNames('Oliver Ekman-Larsson TOR\nJean-Gabriel Pageau', hy, new Set([...teams, 'TOR', 'NYI'])).matched).sort()).toEqual(['13', '14']);
+  });
+
+  it("the owner's ESPN screenshot as the app's OCR read it (2026-11-27): Stützle, Gostisbehere and a stat heading together", () => {
+    const more = buildPlayerIndex([...players, P('10', 'Shayne Gostisbehere', 'CAR', ['D']), P('11', 'Leon Draisaitl', 'EDM')]);
+    // Real OCR lines: the C slot pill ran into "T." and its dot was lost ("BT"); the dot after S read as a hyphen.
+    const ocr = ['EDIT SKATERS OPP G', 'L. Draisaitl I }', '\u00ae.c', 'BT Stutzle |', '@ C, LW', '(Co) &  S-Gostisbehere | i', 'w @D', 'Power Play Shorthanded'].join('\n');
+    const r = extractRosterNames(ocr, more, teams);
+    // "BT": not a team code or slot label, T + Stutzle fits one player and nobody else is called Stützle → added.
+    expect(ids(r.matched).sort()).toEqual(['10', '11', '4']);
+    expect(r.review).toEqual([]);
+    expect(r.unrecognized).toEqual([]);
+    // A team code is not a slot + initial ("OTT Stutzle" is not "T. Stutzle"), and nothing is added from it.
+    expect(extractRosterNames('OTT Stutzle', more, teams).review.map((x) => x.name)).not.toContain('T. Stutzle');
+    expect(extractRosterNames('OTT Stutzle', more, teams).matched).toEqual([]);
+  });
+
+  it('adds a slot run into a dotless initial only when the surname is unique; labels and shared surnames stay cautious', () => {
+    const idx = buildPlayerIndex([...players, P('16', 'Will Smithers', 'BUF'), P('17', 'T.J. Hughes', 'MIN')]);
+    const t = new Set([...teams, 'BUF', 'MIN']);
+    expect(ids(extractRosterNames('CW Smithers', idx, t).matched)).toEqual(['16']);
+    // A slot label itself ("LW", "RW", "BN"): its last letter is the label's, not an initial.
+    for (const line of ['LW Smithers', 'RW Smithers']) expect([line, extractRosterNames(line, idx, t).matched]).toEqual([line, []]);
+    // A shared surname (Jack and Quinn Hughes, T.J. Hughes): a stray letter could name the wrong one, so confirm.
+    const h = extractRosterNames('BJ Hughes', idx, t);
+    expect(h.matched).toEqual([]);
+    expect([h.review[0]!.result.status, h.review[0]!.preselect]).toEqual(['suggested', '6']);
+    // A two-initial first name read whole is an exact name, not slot + initial: "TJ Hughes" is T.J., not Jack.
+    expect(ids(extractRosterNames('TJ Hughes', idx, t).matched)).toEqual(['17']);
+  });
+
+  it('ignores ESPN stat column headings but still lists unknown names and matches Owen Power (2026-11-27)', () => {
+    const pw = buildPlayerIndex([...players, P('15', 'Owen Power', 'BUF', ['D'])]);
+    const r = extractRosterNames('Power Play Shorthanded\nOwen Power BUF\nO. Power BUF D\nZed Unknownson', pw, new Set([...teams, 'BUF']));
+    expect(ids(r.matched)).toEqual(['15']);
+    expect(r.unrecognized).toEqual(['Zed Unknownson']);
+  });
+
+  it('matches names regardless of accents, including letters Unicode does not decompose (ø, æ, ł, ß)', () => {
+    expect(['Tim Stützle', 'Frédérick Gaudreau', 'Mads Søgaard', 'Æsa Lærke', 'Łukasz Kępa', 'Weiß'].map(normalizeName)).toEqual([
+      'tim stutzle',
+      'frederick gaudreau',
+      'mads sogaard',
+      'aesa laerke',
+      'lukasz kepa',
+      'weiss',
+    ]);
+    const acc = buildPlayerIndex([...players, P('11', 'Mads Søgaard', 'OTT', ['G']), P('12', 'Frédérick Gaudreau', 'VAN')]);
+    for (const [line, id] of [
+      ['Mads Sogaard', '11'],
+      ['M. Sogaard OTT', '11'],
+      ['Sogaard, Mads', '11'],
+      ['Frederick Gaudreau', '12'],
+      ['F. Gaudreau VAN', '12'],
+      ['Tim Stutzle', '4'],
+      ['T. Stutzle', '4'],
+    ] as const) {
+      expect([line, ids(extractRosterNames(line, acc, teams).matched)]).toEqual([line, [id]]);
+    }
+    expect(matchName('Mads Søgaard', acc)).toEqual({ status: 'matched', player: acc.byName.get('mads sogaard')![0] });
   });
 
   it('lists a player once for review however differently the screenshots show the name', () => {

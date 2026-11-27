@@ -53,7 +53,6 @@ button { cursor: pointer; }
 .tabbar .tabs { margin-top: 0; }
 .tabbar-row { display: flex; align-items: center; gap: 12px; }
 .tabbar-row .tabs { flex: 1 1 auto; min-width: 0; }
-.tabbar-row .settings-btn { order: 2; padding: 5px 12px; font-size: 13px; }
 .topbar-inner { max-width: 1200px; margin: 0 auto; padding: 10px 16px 0; }
 .brand-row { display: flex; align-items: center; gap: 12px; }
 .brand { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; margin-right: auto; }
@@ -66,15 +65,11 @@ button { cursor: pointer; }
 }
 .tab[aria-selected='true'] { color: var(--text); border-bottom-color: var(--accent); }
 .tab .count { font-weight: 500; color: var(--muted); margin-left: 4px; }
+/* "Needs your input" mark on League Settings and Roster (2026-11-26): small, muted, not an alarm. */
+/* 2026-11-26 (revised): a filled amber circle with a white "!" (about 5:1 contrast), so it reads as an alert, not a 1. */
+.needs-mark { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-left: 6px; border-radius: 50%; background: #b45309; color: #fff; font-size: 13px !important; font-weight: 800; line-height: 1; vertical-align: 1px; flex: none; }
 main { max-width: 1200px; margin: 0 auto; padding: 16px; }
 
-.settings-btn {
-  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
-  border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text);
-  border-radius: 8px; padding: 7px 14px; font-size: 14px; font-weight: 700;
-}
-.settings-btn span { font-size: 16px; line-height: 1; }
-.settings-btn:hover { border-color: var(--accent); background: var(--accent-soft); }
 .label-short { display: none; }
 .data-status { max-width: 1200px; margin: 0 auto; padding: 4px 16px 20px; font-size: 11px; color: var(--muted); opacity: 0.8; display: flex; align-items: baseline; gap: 16px; }
 .data-status.stale { color: var(--warn); opacity: 1; }
@@ -99,15 +94,16 @@ main { max-width: 1200px; margin: 0 auto; padding: 16px; }
 
 /* Period bar */
 .periodbar { display: grid; justify-items: start; gap: 10px; margin-bottom: 16px; }
-.setup-line { display: block; margin: -8px 0 14px; padding: 0; border: 0; background: none; font: inherit; font-size: 12px; color: var(--muted); text-align: left; cursor: pointer; }
-.setup-line:hover { color: var(--accent); text-decoration: underline; }
-/* Roster tab: setup line on the left, Clear Roster on the right; wraps on narrow screens. */
-/* Roster tab, one spacing rhythm: summary 8px under the heading row, 10px to the Paste/Search toggle,
-   8px to Clear Roster (left, under the toggle), 12px to the paste or search content. */
+/* My Roster: 12px between the action row, the entry switcher and the paste or search content. */
 .panel-body.roster-body { gap: 12px; padding-top: 8px; }
-.roster-setup { margin-bottom: -2px; }
-.roster-setup .setup-line { margin: 0; }
-.clear-roster-row { display: flex; justify-content: flex-start; margin-top: -4px; }
+/* My Roster action row (2026-11-26): Add Players, then Clear Roster to its right; wraps only if it must. */
+.roster-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* The entry tools' switcher, with the collapse chevron at its right once the roster has players (2026-11-26). */
+.entry-head { display: flex; align-items: center; gap: 8px; }
+.entry-head .mode-switch { flex: 1 1 auto; min-width: 0; }
+.entry-collapse { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); cursor: pointer; }
+.entry-collapse:hover { border-color: var(--accent); color: var(--accent); }
+.entry-collapse:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .clear-roster-btn {
   padding: 4px 10px; border: 1px solid color-mix(in srgb, var(--bad) 40%, transparent); border-radius: 8px;
   background: var(--surface); color: var(--bad); font-size: 13px; font-weight: 600; white-space: nowrap;
@@ -157,6 +153,9 @@ th { font-size: 12px; color: var(--muted); font-weight: 600; background: var(--s
 th.sortable { cursor: pointer; user-select: none; }
 th.sortable:hover { color: var(--text); }
 th.active { color: var(--accent); }
+/* NHL Team Schedules (2026-11-25): the sorted column keeps the plain header colour; its arrow shows the sort. */
+table.team-table th.sortable.active { color: var(--muted); }
+table.team-table th.sortable.active:hover { color: var(--text); }
 td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
 tr:last-child td { border-bottom: 0; }
 tbody tr:hover td { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
@@ -165,6 +164,12 @@ tbody tr:hover td { background: color-mix(in srgb, var(--surface-2) 60%, transpa
 th.col-selected { box-shadow: inset 0 -2px 0 var(--accent); }
 .team-cell { display: flex; align-items: center; gap: 8px; }
 .team-abbr { font-weight: 700; width: 38px; }
+/* Team row expansion cue (2026-11-26): a small muted chevron after the name; points down when open. */
+.team-chev { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin: -6px -6px -6px -4px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--accent); cursor: pointer; }
+.team-chev svg { transition: transform 0.15s; }
+/* 2026-11-26: blue; points down when collapsed, up when expanded. */
+.team-chev.open svg { transform: rotate(180deg); }
+.team-chev:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
 .mine-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); display: inline-block; }
 .expand-row td { background: var(--surface-2); white-space: normal; }
 .game-chips { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -172,7 +177,7 @@ th.col-selected { box-shadow: inset 0 -2px 0 var(--accent); }
 .game-chip.light { border-color: var(--good); }
 
 /* Nightly strip */
-.strip { display: flex; gap: 2px; align-items: flex-end; height: 64px; padding: 4px 0; overflow-x: auto; }
+.strip { display: flex; gap: 2px; align-items: flex-end; height: 66px; padding: 6px 0 4px; overflow-x: auto; } /* top room for the selected bar's outline */
 .strip .bar-col { flex: 1 0 14px; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 14px; }
 .strip .bar { width: 100%; border-radius: 3px 3px 0 0; background: var(--heat-3); }
 .strip .bar.light { background: var(--good); }
@@ -186,11 +191,23 @@ th.col-selected { box-shadow: inset 0 -2px 0 var(--accent); }
 .strip .bar-col.active .bar { outline: 2px solid var(--text); outline-offset: 1px; }
 .strip .bar-col.active .lbl { color: var(--text); font-weight: 700; }
 .night-detail { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 28px; margin-top: 6px; font-size: 12px; }
+/* Games per Night interaction (2026-11-26): no reserved space until a night is chosen; hover shows a
+   floating tooltip (nothing moves); pressed and selected states make the bars read as tappable. */
+.night-detail:empty { min-height: 0; margin-top: 0; }
+.strip-wrap { position: relative; }
+.strip-tip { position: absolute; bottom: 100%; margin-bottom: 2px; z-index: 5; pointer-events: none; white-space: nowrap; padding: 3px 7px; border-radius: 6px; background: var(--text); color: var(--surface); font-size: 11px; font-weight: 600; box-shadow: 0 2px 6px rgb(0 0 0 / 0.15); }
+.strip .bar { transition: filter 0.12s, opacity 0.15s; }
+@media (hover: hover) {
+  .strip button.bar-col:hover .bar { filter: brightness(0.86); }
+  .strip button.bar-col:hover .lbl { color: var(--text); font-weight: 700; }
+}
+.strip button.bar-col { -webkit-tap-highlight-color: transparent; }
+.strip button.bar-col:active .bar { filter: brightness(0.75); }
+.strip.has-pinned .bar-col:not(.active) .bar { opacity: 0.45; }
 .mine-btn { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 1px 9px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .mine-btn:hover, .mine-btn[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); }
 .summary-col { color: var(--muted); border-left: 1px dashed var(--border); }
-.team-players { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
-.team-player { white-space: nowrap; }
+.team-players { font-size: 13px; }
 .sgrid { border-collapse: separate; border-spacing: 0; font-size: 11px; }
 .sgrid th, .sgrid td { padding: 0; text-align: center; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .sgrid .sticky { position: sticky; left: 0; z-index: 1; background: var(--surface); text-align: left; padding: 4px 10px; min-width: 70px; border-right: 1px solid var(--border); font-size: 12px; }
@@ -200,6 +217,12 @@ th.col-selected { box-shadow: inset 0 -2px 0 var(--accent); }
 .sgrid td.game { background: var(--surface-2); font-weight: 600; color: var(--text); }
 .sgrid .wk { border-left: 1px solid var(--border); }
 .sgrid td.n, .sgrid th.n { padding: 4px 10px; text-align: right; font-size: 12px; }
+/* Your Players column (2026-11-26, revised): the Team Schedules blue-dot count; tapping it opens the list below the row. */
+.sgrid th.sg-mine, .sgrid td.sg-mine { padding: 3px 8px; text-align: right; border-left: 1px solid var(--border); font-size: 12px; }
+.sgrid td.sg-mine .mine-btn { font-size: 12px; }
+.sgrid tr.sg-expand td { text-align: left; padding: 0; height: auto; }
+/* The list stays in view while the grid is scrolled sideways. */
+.sg-expand-in { position: sticky; left: 0; display: inline-block; max-width: min(100vw - 48px, 640px); padding: 6px 10px; white-space: normal; }
 /* The grid isn't interactive: no row hover highlight (game-day shading stays). */
 .sgrid tbody tr:hover td:not(.game) { background: none; }
 /* League-wide NHL games per date, above the date headers. */
@@ -251,9 +274,163 @@ th.col-selected { box-shadow: inset 0 -2px 0 var(--accent); }
 .lgrid .count-row th.cnt.sel { background: var(--accent-soft); }
 .count-key { font-size: 11px; color: var(--text); }
 .lgrid td.c.sel { background: var(--accent-soft); }
+.lgrid td.c.here { box-shadow: inset 0 0 0 2px var(--accent); }
+.lgrid tr.row-sel > td.sticky { background: var(--accent-soft); }
+.lgrid .cell-btn { display: inline-flex; align-items: center; justify-content: center; width: 100%; min-width: 26px; height: 30px; padding: 0; border: 0; background: none; cursor: pointer; border-radius: 6px; }
+.lgrid .cell-btn:hover { background: var(--surface-2); }
+.lgrid .cell-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.lgrid .name-btn { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
+.lgrid .name-btn:hover { color: var(--accent); }
+/* Lineup (rebuild 2026-11-23): period overview calendar, then the daily lineup. */
+.lu-overview-body, .lu-daily-body { display: flex; flex-direction: column; gap: 10px; }
+.lu-facts { margin: 0; color: var(--muted); }
+.lu-open-text { color: var(--bad); font-weight: 600; }
+.lu-manual-bar { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.lu-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.lu-cal-head { text-align: center; font-size: 11px; font-weight: 700; color: var(--muted); }
+.lu-day, .lu-day-blank { min-height: 52px; border-radius: 8px; }
+.lu-day { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 2px 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+.lu-day:hover { border-color: var(--accent); }
+.lu-day[aria-pressed='true'] { border: 2px solid var(--accent); background: var(--accent-soft); }
+.lu-day.issue { box-shadow: inset 0 -3px 0 var(--warn); }
+.lu-day-date { font-size: 11px; color: var(--muted); line-height: 1; }
+.lu-day-count { font-size: 12px; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--muted); }
+.lu-day-count b { font-size: 15px; color: var(--text); }
+.lu-day-bar { width: 70%; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.lu-day-bar span { display: block; height: 100%; background: var(--accent); }
+/* Red alert dot (2026-11-25): a genuine open lineup spot that needs attention. */
+.lu-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #be123c; vertical-align: middle; }
+/* Day indicators (2026-11-26): crimson dot and bar = an avoidable benching; pale yellow tile = games that don't fit. */
+.lu-day.att-avoidable .lu-day-bar span { background: #be123c; }
+.lu-day.att-capacity { background: #fdf6d3; }
+/* Bench rows: a thin crimson edge for a game that fits; a muted "No room" note for one that doesn't. */
+.lu-row.lu-avoid { box-shadow: inset 3px 0 0 #be123c; }
+.lu-noroom { color: var(--muted); font-size: 12px; }
+/* A benched player with a game who can't fit: the row gets the day tile's pale yellow. */
+.lu-row.lu-noroom-row { background: #fdf6d3; }
+.lu-day-dot { position: absolute; top: 4px; right: 4px; }
+.lu-daily-head h2 { margin-right: auto; }
+.lu-day-count-text { font-weight: 400; color: var(--muted); }
+.lu-manual-note { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.lu-manual-note .section-hint { margin: 0; }
+.lu-open { border: 1px solid color-mix(in srgb, var(--bad) 35%, var(--border)); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.lu-open h3 { margin: 0; font-size: 13px; color: var(--bad); }
+.lu-open-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lu-sub { margin: 4px 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.lu-list { display: flex; flex-direction: column; }
+.lu-row { display: grid; grid-template-columns: minmax(0, 1fr) 40px; align-items: center; border-bottom: 1px solid var(--border); }
+.lu-row:last-child { border-bottom: 0; }
+.lu-main { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 42px; padding: 2px 0; border: 0; background: none; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.lu-main:hover .lu-name { color: var(--accent); }
+.lu-row.lu-benched .lu-main, .lu-row.lu-onir .lu-main { min-height: 36px; }
+.lu-pos { justify-self: start; min-width: 36px; text-align: center; font-size: 12px; font-weight: 700; padding: 3px 4px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); }
+.lu-pos.lu-benched, .lu-pos.lu-onir { background: var(--surface-2); color: var(--muted); font-weight: 600; }
+.lu-name { min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lu-row.lu-benched .lu-name, .lu-row.lu-onir .lu-name { font-weight: 500; font-size: 14px; }
+.lu-name .pos { margin-left: 4px; }
+.lu-game { font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lu-row.lu-noone { grid-template-columns: 42px minmax(0, 1fr); gap: 8px; min-height: 34px; }
+.lu-empty { color: var(--muted); font-style: italic; }
+/* Empty slot that can be filled (button), and starters without a game that day (2026-11-24). */
+button.lu-fill { width: 100%; border: 0; border-bottom: 1px solid var(--border); background: none; font: inherit; text-align: left; cursor: pointer; align-items: center; }
+button.lu-fill:hover .lu-empty { color: var(--accent); }
+.lu-row.lu-idle .lu-name { color: var(--muted); font-weight: 500; }
+.lu-row .star { justify-self: center; width: 36px; height: 36px; }
+.lu-nhl summary { cursor: pointer; color: var(--muted); }
+.lu-nhl .game-chips { margin-top: 6px; }
+@media (min-width: 900px) {
+  .lu { display: grid; grid-template-columns: minmax(320px, 420px) minmax(0, 1fr); align-items: start; gap: 16px; }
+  .lu > .cards { grid-column: 1 / -1; }
+  .lu-overview { position: sticky; top: 90px; }
+}
+/* Schedule / Lineup switcher (2026-11-23) and the Schedule grid. */
+.plan-views { justify-self: start; }
+.plan-views button { min-width: 96px; padding: 6px 14px; font-weight: 600; }
+.lu > .plan-views { grid-column: 1 / -1; }
+.sg { --sg-name: 150px; --sg-col: 48px; }
+.sg-panel-body { padding-top: 10px; }
+.sg-key { margin: 0 0 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.sg-table { table-layout: fixed; border-collapse: separate; border-spacing: 0; width: calc(var(--sg-name) + var(--sg-cols) * var(--sg-col)); }
+.sg-col-name { width: var(--sg-name); }
+.sg-col-date { width: var(--sg-col); }
+/* Scrolling and the persistent header come from StickyHeadTable (.sh-*); the grid adds its top border. */
+.sg-scroll { border-top: 1px solid var(--border); }
+.sg-table thead th { background: var(--surface); border-bottom: 1px solid var(--border); }
+.sg-table thead th.sg-corner { z-index: 2; }
+.sg-name { position: sticky; left: 0; z-index: 1; background: var(--surface); text-align: left; padding: 4px 6px 4px 0; border-right: 1px solid var(--border); }
+.sg-corner { font-size: 11px; font-weight: 700; color: var(--muted); vertical-align: bottom; padding-bottom: 6px; }
+.sg-date { padding: 4px 0 6px; text-align: center; font-weight: 400; line-height: 1.15; }
+.sg-date span { display: block; }
+.sg-month { font-size: 10px; font-weight: 700; color: var(--accent); }
+.sg-wd { font-size: 10px; color: var(--muted); }
+.sg-dn { font-size: 13px; font-weight: 700; }
+.sg-fit { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.sg-fit.man { color: var(--accent); font-weight: 700; }
+/* Date headers open that day in Set Lineup; the selected day is highlighted (2026-11-26). */
+.sg-date-btn { display: block; width: 100%; padding: 0; border: 0; border-radius: 6px; background: none; font: inherit; color: inherit; line-height: inherit; cursor: pointer; }
+.sg-date-btn:hover .sg-dn { color: var(--accent); }
+.sg-date.sel { background: var(--accent-soft); box-shadow: inset 0 -3px 0 var(--accent); }
+.sg-date.sel .sg-dn { color: var(--accent); }
+.sg-row > * { border-bottom: 1px solid var(--border); }
+/* Section breaks: Skaters, Goalies, IR. The label stays pinned with the player column. */
+.sg-group-row > * { background: var(--surface-2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.sg-group-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 5px 8px; height: 26px; }
+.sg-group-count { font-weight: 600; opacity: 0.8; margin-left: 2px; }
+tbody.sg-group + tbody.sg-group .sg-group-row > * { border-top: 6px solid var(--surface); box-shadow: inset 0 1px 0 var(--border); }
+.sg-name-in { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.sg-name-in .star { flex: none; width: 26px; height: 36px; }
+.sg-player { display: flex; flex-direction: column; min-width: 0; }
+.sg-pname { white-space: normal; overflow-wrap: anywhere; font-size: 13px; font-weight: 600; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.sg-meta { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 1px; }
+.sg-meta .pos, .sg-meta .badge { font-size: 9px; padding: 0 4px; }
+.sg-ir .sg-pname { color: var(--muted); }
+.sg-td { padding: 3px 2px; text-align: center; height: 44px; }
+.sg-cell { display: inline-flex; align-items: center; justify-content: center; width: 100%; min-height: 34px; padding: 0 1px; border-radius: 7px; font: inherit; font-size: 11px; font-weight: 700; letter-spacing: -0.02em; cursor: pointer; }
+.sg-cell.on { background: var(--accent); border: 1px solid var(--accent); color: #fff; }
+/* Not in lineup (2026-11-26): white with a crimson rounded border (was grey). */
+.sg-cell.off { background: var(--surface); border: 1px solid #be123c; color: var(--muted); font-weight: 600; }
+.sg-cell:hover { filter: brightness(0.95); }
+.sg-cell.here { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 1px; }
+.sg-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sg-sample { width: auto; min-height: 22px; padding: 0 6px; cursor: default; }
+@media (max-width: 600px) {
+  .sg { --sg-name: 112px; --sg-col: 44px; }
+}
+/* Contextual sheet: a bottom sheet on phones, a side panel on wider screens. */
+.sheet-layer { position: fixed; inset: 0; z-index: 50; }
+.sheet-backdrop { position: absolute; inset: 0; background: rgb(15 23 42 / 25%); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 78vh; overflow-y: auto; background: var(--surface); border-radius: 14px 14px 0 0; box-shadow: 0 -4px 24px rgb(15 23 42 / 18%); padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); outline: none; }
+.sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.sheet-title { min-width: 0; }
+.sheet-title .day-nav { margin-top: 4px; }
+.sheet-body { display: flex; flex-direction: column; gap: 10px; }
+.sheet-body p { margin: 0; }
+.sheet-sub { margin: 6px 0 0; font-size: 13px; }
+.sheet-options { display: flex; flex-direction: column; gap: 6px; }
+.option-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; cursor: pointer; min-height: 44px; }
+.option-btn:hover:not(:disabled) { border-color: var(--accent); }
+.option-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.option-btn.gain { border-color: color-mix(in srgb, var(--good) 45%, var(--border)); }
+.option-btn.lose { color: var(--bad); }
+.sheet-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.sheet-day { border-top: 1px solid var(--border); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.trade-list, .change-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.trade-list .gain, .gain-text { color: var(--good); }
+.trade-list .lose, .lose-text { color: var(--bad); }
+.day-rows { display: flex; flex-direction: column; }
+.day-row { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center; gap: 8px; padding: 6px 4px; border: 0; border-bottom: 1px dashed var(--border); background: none; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.day-row:disabled { cursor: default; }
+.day-row:hover:not(:disabled) { background: var(--surface-2); }
+.day-row-pos { font-size: 12px; font-weight: 700; color: var(--muted); }
+@media (min-width: 900px) {
+  .sheet { left: auto; top: 0; width: 400px; max-height: none; border-radius: 0; box-shadow: -4px 0 24px rgb(15 23 42 / 18%); padding: 16px; }
+}
 .cell { display: inline-block; width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; }
 .cell.used { background: var(--accent); }
-.cell.unused { border: 2px solid var(--bad); }
+/* Lineup grid (redesign v1): orange = a genuine opportunity; grey ring = another player has the spot; dashed = no slot. */
+.cell.opp { border: 2px solid var(--bad); background: color-mix(in srgb, var(--bad) 18%, transparent); }
+.cell.unused { border: 2px solid var(--muted); opacity: 0.55; }
+.cell.blocked { border: 2px dashed var(--muted); opacity: 0.45; }
 .cell.ir { background: var(--border); }
 .cell.idle { border: 2px dashed var(--muted); opacity: 0.6; }
 .lgrid tfoot td { font-size: 11px; font-weight: 600; padding: 4px 0; color: var(--muted); }
@@ -298,6 +475,8 @@ th.col-selected { box-shadow: inset 0 -2px 0 var(--accent); }
 .mode-switch button { border: 1px solid transparent; background: none; border-radius: 7px; padding: 8px 12px; font-weight: 700; color: var(--muted); }
 .mode-switch button[aria-selected='true'] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 .paste-hint { margin: 0; font-size: 12px; color: var(--muted); }
+/* About one row shorter than other text boxes (2026-11-26); the four-line example still fits. */
+textarea.paste-box { min-height: 116px; }
 /* Roster input: three equal modes (Paste Roster, Upload Image, Search Players). */
 .mode-switch.modes-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .mode-switch.modes-3 button { line-height: 1.2; }
@@ -334,8 +513,6 @@ textarea { min-height: 140px; resize: vertical; font-family: inherit; }
 .pos-toggles { display: inline-flex; gap: 2px; }
 .pos-toggles button { border: 1px solid var(--border); background: var(--surface); border-radius: 4px; font-size: 11px; font-weight: 700; padding: 1px 5px; color: var(--muted); }
 .pos-toggles button[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: #fff; }
-.counts { display: flex; gap: 12px; font-size: 13px; }
-.counts b.over { color: var(--bad); }
 .usable-label { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .usable-label b { color: var(--text); font-weight: 600; }
 .usable-label-text { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.3; }
@@ -370,7 +547,12 @@ textarea { min-height: 140px; resize: vertical; font-family: inherit; }
 .slot-row, .period-row { display: grid; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .slot-row { grid-template-columns: 90px 64px 1fr 28px; }
 .period-row { grid-template-columns: 1fr 140px 140px 28px; }
-@media (max-width: 560px) { .period-row { grid-template-columns: 1fr 1fr; } }
+/* Phones (2026-11-26): each round on one line (name, start, end, remove) instead of the end date wrapping. */
+@media (max-width: 560px) {
+  .period-row { grid-template-columns: minmax(64px, 0.8fr) minmax(0, 1.4fr) minmax(0, 1.4fr) 28px; gap: 6px; }
+  .period-row input { padding: 5px 4px; font-size: 12px; min-width: 0; }
+  .period-row input[type='date']::-webkit-calendar-picker-indicator { margin: 0; padding: 0; width: 12px; height: 12px; }
+}
 .slot-row input, .period-row input { width: 100%; padding: 5px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
 h3 { font-size: 13px; margin: 16px 0 6px; }
 .contact-form textarea { min-height: 160px; }
@@ -378,12 +560,20 @@ h3 { font-size: 13px; margin: 16px 0 6px; }
   position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 60;
   background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-weight: 600; box-shadow: var(--shadow);
 }
+/* While a Lineup sheet is open the toast must not cover it: above a bottom sheet (phones), or centered
+   beside the side panel (desktop). */
+@media (max-width: 899px) {
+  body:has(.sheet-layer) .toast { bottom: auto; top: calc(12px + env(safe-area-inset-top)); }
+}
+@media (min-width: 900px) {
+  body:has(.sheet-layer) .toast { left: calc((100% - 400px) / 2); }
+}
 
 @media (max-width: 600px) {
   main { padding: 12px; }
   .brand { font-size: 14px; }
   .team-cell .muted { display: none; }
-  .table-wrap table.next-week th.sortable { white-space: normal; } /* Next Week's Team Schedules headers wrap so the table fits a phone */
+  table.team-table.next-week th.sortable { white-space: normal; } /* Next Week's team schedule headers wrap so the table fits a phone (also in the persistent header copy) */
   .lgrid .sticky { min-width: 128px; max-width: 150px; white-space: normal; }
   th, td { padding: 6px 8px; }
   .icon-btn .small { display: none; }
@@ -394,7 +584,6 @@ h3 { font-size: 13px; margin: 16px 0 6px; }
   .topbar-inner { padding: 8px 12px 0; }
   .tabbar-row { flex-wrap: wrap; gap: 0; }
   .tabbar-row .tabs { flex-basis: 100%; }
-  .tabbar-row .settings-btn { order: 0; margin: 6px 0 2px; }
   .custom-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
   .custom-row > input { width: 100%; }
   .custom-row .date-inputs { grid-column: 1 / -1; order: 2; display: flex; }
@@ -405,6 +594,9 @@ h3 { font-size: 13px; margin: 16px 0 6px; }
   .tab .label-full { display: none; }
   .tab .label-short { display: inline; }
   .tab .count { margin-left: 3px; }
+  /* Games Optimizer tabs (2026-11-25): natural label widths, equal padding, packed from the left,
+     so the gap between labels is the same whatever their length (not equal-width boxes). */
+  .planner-tabs .tab { flex: 0 0 auto; padding: 10px clamp(5px, calc((100vw - 300px) / 10), 10px); }
   .mode-switch.modes-3 button { padding: 8px 4px; }
   /* Import review on phones: the choices go on their own full-width line under the name. */
   .review-row { grid-template-columns: 22px minmax(0, 1fr); }
@@ -423,6 +615,10 @@ h3 { font-size: 13px; margin: 16px 0 6px; }
   .roster-table .r-elig { grid-area: elig; white-space: normal; }
   .roster-table .r-status { grid-area: status; justify-self: end; }
   .roster-table .r-remove { grid-area: remove; }
+}
+/* Very narrow phones (≤ 340px): the Games Optimizer tabs still fit on one line. */
+@media (max-width: 340px) {
+  .planner-tabs .tab { font-size: 12px; }
 }
 
 /* Touch screens: comfortable tap targets. Icons keep their size; the tappable area grows. */
@@ -449,19 +645,22 @@ h3 { font-size: 13px; margin: 16px 0 6px; }
   .period-row { grid-template-columns: 1fr 140px 140px 40px; }
 }
 @media (pointer: coarse) and (max-width: 560px) {
-  .period-row { grid-template-columns: 1fr 1fr; }
+  .period-row { grid-template-columns: minmax(64px, 0.8fr) minmax(0, 1.4fr) minmax(0, 1.4fr) 32px; }
 }
 
 
 /* Player Evaluator (first prototype; layout expected to change after review) */
-/* Navigation: two equal product areas (Playoff Planner, Player Evaluator), with League Settings on
-   the same row; the selected area's destinations are the tab row beneath. */
+/* Navigation: three product areas (Games Optimizer, Player Normalizer, My Team; 2026-11-26); the selected
+   area's destinations are the tab row beneath. */
 .tabbar .area-row { display: flex; align-items: center; gap: 12px; padding-top: 6px; }
 .areas { display: flex; gap: 4px; margin-right: auto; min-width: 0; }
 .area { border: 0; background: none; padding: 5px 10px; border-radius: 8px; font-size: 14px; font-weight: 700; color: var(--muted); white-space: nowrap; }
 .area:hover { color: var(--text); background: var(--surface-2); }
 .area[aria-current='true'] { color: var(--accent); background: var(--accent-soft); }
-.area-row .settings-btn { padding: 5px 12px; font-size: 13px; }
+/* League Settings is a My Team page (2026-11-26), set to the old dialog's width. On phones the lineup-slot
+   rows are wider than the screen (as they were in the dialog); they scroll inside the form, not the page. */
+.settings-page { max-width: 720px; min-width: 0; }
+.settings-page .panel-body { overflow-x: auto; }
 .evaluator { gap: 12px; }
 .eval-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 4px 12px; }
 .eval-title { font-size: 18px; margin: 0; }
@@ -480,6 +679,9 @@ input[aria-invalid='true'] { border-color: var(--bad); }
 .eval-table tbody th.sticky { border-right: 1px solid var(--border); }
 .ev-name { display: flex; align-items: center; gap: 6px; font-weight: 600; }
 .ev-meta { display: block; font-size: 11px; color: var(--muted); }
+/* Stat values (2026-11-26): 13px (briefly 12.5px; was the 14px body size), so more columns fit on phones.
+   Normalized values stay bold and clearly above the 11px muted actual totals beneath them. */
+.eval-table td.n { font-size: 13px; }
 .ev-cell b { display: block; font-weight: 700; }
 .ev-actual { display: block; font-size: 11px; color: var(--muted); }
 .ev-reason { color: var(--muted); font-size: 12px; white-space: normal; }
@@ -488,7 +690,14 @@ input[aria-invalid='true'] { border-color: var(--bad); }
 .eval-table tr.roster-row > * { background: var(--roster-row); }
 .eval-foot { display: grid; gap: 8px; padding: 10px 14px 12px; border-top: 1px solid var(--border); }
 .ev-search { flex: none; max-width: 360px; }
-.ev-cmp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+/* Comparison controls (2026-11-26): one row under the stat groups, above the table; Clear sits to the right. */
+.ev-cmp-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; padding: 8px 14px; }
+.ev-cmp-row .ev-search { flex: 1 1 auto; min-width: 0; max-width: 360px; }
+.ev-cmp-row .ev-search input { padding-top: 6px; padding-bottom: 6px; }
+.ev-cmp-row .btn { flex: none; white-space: nowrap; min-height: 34px; }
+/* Crimson outline only when there are comparison players to clear. */
+.ev-clear.has-items { border-color: #be123c; color: var(--text); }
+.ev-cmp-row .suggest { right: auto; min-width: 100%; width: max-content; max-width: min(360px, calc(100vw - 40px)); }
 /* Sort-basis dropdown (Normalized / Regular Stats): a small secondary control beside the stat groups. */
 .sort-basis { position: relative; display: inline-flex; align-items: center; gap: 6px; }
 .sort-basis-label { font-size: 12px; color: var(--muted); white-space: nowrap; }
@@ -509,14 +718,20 @@ input[aria-invalid='true'] { border-color: var(--bad); }
 .ev-legend { margin: 0; }
 .rank-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; border-bottom: 1px solid var(--border); }
 .rank-controls .field { gap: 2px; }
+/* Player Rankings (2026-11-26): no divider or "Position" label between the stat groups and the filters. */
+.panel-head.no-rule { border-bottom: 0; padding-bottom: 2px; }
+.panel-head.no-rule + .rank-controls { padding-top: 6px; }
 .rank-table .rk { position: sticky; left: 0; z-index: 1; width: 40px; min-width: 40px; background: var(--surface); }
 .rank-table th.sticky { left: 40px; }
 .rank-more { padding: 10px 14px; border-top: 1px solid var(--border); }
 @media (max-width: 600px) {
   .tabbar .area-row { padding-top: 6px; gap: 8px; }
-  /* Phones: each area name on two lines ("Games / Optimizer"), so both fit beside League Settings. */
+  /* Phones: each area name on two lines ("Games / Optimizer"), so all three fit. */
   .areas { gap: 2px; }
   .area { width: min-content; padding: 5px 8px; white-space: normal; line-height: 1.15; text-align: center; }
+  /* The My Team mark sits on the button's corner on phones, so the two-line labels keep their width. */
+  .area { position: relative; }
+  .area .needs-mark { position: absolute; top: -7px; right: -7px; margin: 0; box-shadow: 0 0 0 2px var(--surface); }
   .eval-table th, .eval-table td { padding: 6px 6px; }
   .eval-table tbody th.sticky { white-space: normal; min-width: 112px; max-width: 132px; font-size: 13px; }
   .eval-table .ev-name { display: block; }
@@ -530,11 +745,32 @@ input[aria-invalid='true'] { border-color: var(--bad); }
   .bench-season { flex: 1 1 100%; }
   .bench-controls > label, .bench-season label { min-width: 76px; }
   .ev-search { max-width: none; }
+  .ev-cmp-row { padding: 8px 12px; gap: 6px; }
+  .ev-cmp-row .ev-search { max-width: none; }
+  /* Two short lines ("Clear comparison / players") so the search box keeps room for its placeholder. */
+  .ev-cmp-row .btn.small { padding: 3px 8px; font-size: 12px; line-height: 1.15; white-space: normal; max-width: 122px; }
   .rank-controls { gap: 8px 12px; }
   .rank-table .rk { width: 30px; min-width: 30px; }
   .rank-table th.sticky { left: 30px; }
 }
 @media (max-width: 400px) {
-  .eval-table th, .eval-table td { padding: 6px 4px; }
-  .eval-table tbody th.sticky { min-width: 100px; max-width: 112px; padding-left: 6px; }
+  .eval-table th, .eval-table td { padding: 6px 3px; }
+  .eval-table tbody th.sticky { min-width: 92px; max-width: 108px; padding-left: 6px; }
 }
+
+/* Persistent table headers (StickyHeadTable, 2026-11-24): the page scrolls vertically; the table area
+   scrolls only sideways; a page-sticky copy of the header follows it with a scroll-driven animation. */
+.sh { position: relative; }
+.sh-scroll { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: none; }
+.sh-head { display: none; }
+@supports (animation-timeline: scroll()) {
+  .sh-head { display: block; position: sticky; top: var(--sh-top, 0px); height: var(--sh-h, 0px); margin-bottom: calc(-1 * var(--sh-h, 0px)); z-index: 6; }
+  /* overflow: clip, not hidden: a hidden box can still be scrolled by code (scrollIntoView, find-in-page),
+     which would shift the header copy off its columns; clip can't be scrolled at all. */
+  .sh-clip { overflow: hidden; overflow: clip; background: var(--surface); box-shadow: 0 1px 0 var(--border); }
+  .sh-strip { table-layout: fixed; animation: sh-slide linear both; animation-timeline: var(--sh-tl); }
+  .sh-strip .sticky, .sh-strip .rk, .sh-strip .sg-name { animation: sh-hold linear both; animation-timeline: var(--sh-tl); }
+  .sh-under { visibility: hidden; }
+}
+@keyframes sh-slide { from { transform: translateX(0); } to { transform: translateX(calc(-1 * var(--sh-max, 0px))); } }
+@keyframes sh-hold { from { transform: translateX(0); } to { transform: translateX(var(--sh-max, 0px)); } }

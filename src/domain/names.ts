@@ -1,9 +1,13 @@
-/** Canonical form of a person's name for matching: no accents, punctuation, case or suffixes. */
+/** Letters that Unicode doesn't split into base letter + accent (so NFD alone leaves them): their usual plain spelling. */
+const PLAIN_LETTERS: Record<string, string> = { ø: 'o', æ: 'ae', œ: 'oe', ł: 'l', đ: 'd', ð: 'd', þ: 'th', ß: 'ss', ı: 'i' };
+
+/** Canonical form of a person's name for matching: no accents (any letter), punctuation, case or suffixes. */
 export function normalizeName(name: string): string {
   return name
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
+    .replace(/[øæœłđðþßı]/g, (c) => PLAIN_LETTERS[c]!)
     .replace(/[.'’`]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\b(jr|sr|ii|iii|iv)\b/g, '')

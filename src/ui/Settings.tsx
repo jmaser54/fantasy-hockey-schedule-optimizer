@@ -1,28 +1,63 @@
-import { useEffect, useState } from 'react';
-import { DEFAULT_LEAGUE, DEFAULT_PERIODS, activeSlotCount, validateLeague, validatePeriod } from '../domain/league.ts';
+import { useEffect, useState, type MutableRefObject } from 'react';
+import { DEFAULT_LEAGUE, DEFAULT_PERIODS, validateLeague, validatePeriod } from '../domain/league.ts';
 import type { LeagueConfig, Period } from '../domain/types.ts';
 import { useApp } from './context.ts';
 import { PosToggles } from './common.tsx';
 
-export function SettingsModal({ onClose }: { onClose: () => void }) {
+/** Asks before leaving the page with unsaved edits: true when it's fine to leave. */
+export type LeaveGuard = MutableRefObject<(() => boolean) | null>;
+
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * League Settings as a page in My Team (2026-11-26; it was a dialog from the top bar). The same form,
+ * validation and explicit Save; "Discard changes" restores the saved values. Leaving with unsaved edits
+ * (another tab or area, a link, a reload) asks first; staying keeps the edits.
+ */
+export function LeagueSettingsPage({ leaveGuard }: { leaveGuard: LeaveGuard }) {
   const { state, dispatch, toast } = useApp();
-  const [league, setLeague] = useState<LeagueConfig>(structuredClone(state.league));
-  const [periods, setPeriods] = useState<Period[]>(structuredClone(state.periods));
-  const leagueErrors = validateLeague(league);
+  const [league, setLeague] = useState<LeagueConfig>(() => structuredClone(state.league));
+  const [periods, setPeriods] = useState<Period[]>(() => structuredClone(state.periods));
+  // The saved values the draft started from: edits are anything that differs from these.
+  const [base, setBase] = useState(() => ({ league: state.league, periods: state.periods }));
+  const dirty = !same(league, base.league) || !same(periods, base.periods);
+  // Saved settings changed elsewhere (another browser tab) while nothing is edited here: show them.
+  useEffect(() => {
+    if (dirty || (same(state.league, base.league) && same(state.periods, base.periods))) return;
+    setLeague(structuredClone(state.league));
+    setPeriods(structuredClone(state.periods));
+    setBase({ league: state.league, periods: state.periods });
+  }, [state.league, state.periods]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    leaveGuard.current = () => !dirty || globalThis.confirm('Discard your unsaved league settings changes?');
+    return () => {
+      leaveGuard.current = null;
+    };
+  }, [dirty, leaveGuard]);
+  useEffect(() => {
+    if (!dirty) return;
+    const onUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onUnload);
+    return () => window.removeEventListener('beforeunload', onUnload);
+  }, [dirty]);
+  // Blank fields may be saved (a new user can change playoff rounds first); invalid values may not.
+  const leagueErrors = validateLeague(league, { allowBlank: true });
+  const filledActive = league.slots.reduce((n, s) => n + (Number.isNaN(s.count) ? 0 : s.count), 0);
   const periodErrors = periods.map(validatePeriod);
   const hasErrors = leagueErrors.length > 0 || periodErrors.some(Boolean) || periods.length === 0;
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
 
   const save = () => {
     dispatch({ type: 'setLeague', league });
     dispatch({ type: 'setPeriods', periods });
+    setBase({ league, periods });
     toast('Settings saved');
-    onClose();
+  };
+  const discard = () => {
+    setLeague(structuredClone(base.league));
+    setPeriods(structuredClone(base.periods));
   };
   const num = (v: string) => (v === '' ? NaN : Math.floor(Number(v)));
   const updSlot = (i: number, patch: Partial<LeagueConfig['slots'][number]>) =>
@@ -30,8 +65,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const updPeriod = (i: number, patch: Partial<Period>) => setPeriods(periods.map((p, k) => (k === i ? { ...p, ...patch } : p)));
 
   return (
-    <div className="backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="panel modal" role="dialog" aria-modal="true" aria-label="League Settings">
+    <div className="stack">
+      <section className="panel settings-page" aria-label="League Settings">
         <div className="panel-head">
           <h2>League Settings</h2>
         </div>
@@ -48,7 +83,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <h3>
-            Daily Lineup Slots <span className="muted small">({activeSlotCount(league)} active · {Math.max(0, league.rosterSize - activeSlotCount(league))} bench)</span>
+            Daily Lineup Slots <span className="muted small">({filledActive} active · {Number.isNaN(league.rosterSize) ? '–' : Math.max(0, league.rosterSize - filledActive)} bench)</span>
           </h3>
           {league.slots.map((s, i) => (
             <div className="slot-row" key={i}>
@@ -106,15 +141,15 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             </button>
           </div>
           <div className="modal-actions">
-            <button className="btn ghost" onClick={onClose}>
-              Cancel
+            <button className="btn ghost" disabled={!dirty} onClick={discard}>
+              Discard changes
             </button>
             <button className="btn primary" disabled={hasErrors} onClick={save}>
               Save
             </button>
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

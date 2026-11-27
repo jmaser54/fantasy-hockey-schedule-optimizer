@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { rankTeams } from './rankings.ts';
-import { defaultDir, gridCell, matchupsOn, nextSort, rosterPlayersByTeam, sortTeamRows } from './teamSchedules.ts';
+import { defaultDir, formatRosteredPlayer, formatRosterList, gridCell, matchupsOn, nextSort, rosterPlayersByTeam, sortTeamRows } from './teamSchedules.ts';
 import { sched } from './testUtils.ts';
 import type { Player } from './types.ts';
 
@@ -89,5 +89,34 @@ describe('roster players by team', () => {
     expect(m.get('NYR')).toBeUndefined(); // teams with no rostered players have no entry
     // Removing a player updates the grouping.
     expect(rosterPlayersByTeam(entries.slice(1), resolve).get('TOR')?.map((p) => p.id)).toEqual(['b']);
+  });
+});
+
+describe('compact rostered-player list (2026-11-26, revised)', () => {
+  it('positions in parentheses after each name, IR in brackets, players joined by commas', () => {
+    expect(formatRosterList([])).toBe('');
+    expect(formatRosterList([{ id: 'a', name: 'Leo Carlsson', positions: ['C'], onIr: false }])).toBe('Leo Carlsson (C)');
+    expect(formatRosteredPlayer({ id: 'a', name: 'Player Name', positions: ['C', 'RW'], onIr: false })).toBe('Player Name (C, RW)');
+    expect(formatRosteredPlayer({ id: 'a', name: 'Player Name', positions: ['C', 'RW'], onIr: true })).toBe('Player Name (C, RW [IR])');
+    expect(
+      formatRosterList([
+        { id: 'a', name: 'Lukas Dostal', positions: ['G'], onIr: false },
+        { id: 'b', name: 'Tristan Luneau', positions: ['D'], onIr: true },
+      ]),
+    ).toBe('Lukas Dostal (G), Tristan Luneau (D [IR])');
+  });
+});
+
+describe('Grid default order (2026-11-26)', () => {
+  it('most games first, ties alphabetical by team; Your Players sorts by count both ways when chosen', () => {
+    const rows = [
+      { team: 'TOR', values: { games: 3, mine: 2 } },
+      { team: 'ANA', values: { games: 4, mine: 0 } },
+      { team: 'BOS', values: { games: 3, mine: 0 } },
+      { team: 'EDM', values: { games: 4, mine: 1 } },
+    ];
+    expect(sortTeamRows(rows, { key: 'games', dir: 'desc' }, ['games']).map((r) => r.team)).toEqual(['ANA', 'EDM', 'BOS', 'TOR']);
+    expect(sortTeamRows(rows, { key: 'mine', dir: 'desc' }, ['games']).map((r) => r.team)).toEqual(['TOR', 'EDM', 'ANA', 'BOS']);
+    expect(sortTeamRows(rows, { key: 'mine', dir: 'asc' }, ['games']).map((r) => r.team)).toEqual(['ANA', 'BOS', 'EDM', 'TOR']);
   });
 });

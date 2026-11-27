@@ -33,9 +33,20 @@ const INPUT_MODES: { id: InputMode; label: string }[] = [
 ];
 
 export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
-  const { state, dispatch, resolve, toast, setupLine } = useApp();
+  const { state, dispatch, resolve, toast } = useApp();
   const [mode, setMode] = useState<InputMode>('paste');
   const [outcome, setOutcome] = useState<ImportOutcome | null>(null);
+  // Entry tools (2026-11-26): always shown while the roster is empty; once it has players they fold into one
+  // "Add Players" button, and reopen until Done or a paste/screenshot import that fully succeeds.
+  const [entryOpen, setEntryOpen] = useState(() => state.roster.length === 0);
+  useEffect(() => {
+    if (state.roster.length === 0) setEntryOpen(true);
+  }, [state.roster.length]);
+  const showEntry = entryOpen || state.roster.length === 0;
+  const closeEntry = () => {
+    setEntryOpen(false);
+    setOutcome(null);
+  };
   const { data } = useApp();
   const index = usePlayerIndex();
   const teamIds = useMemo(() => new Set(data.teams.map((t) => t.id)), [data.teams]);
@@ -50,8 +61,6 @@ export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
     return m;
   }, [state.roster, resolve]);
   const issues = validateRoster(state.roster, playersMap, state.league);
-  const active = state.roster.filter((e) => !e.onIr).length;
-  const ir = state.roster.length - active;
 
   const add = (p: Player) => {
     if (onRoster.has(p.id)) return toast(`${p.name} is already on your roster`);
@@ -80,6 +89,11 @@ export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
       ignored: r.ignored,
     };
     if (fresh.length) toast(`Added ${fresh.length} player${fresh.length === 1 ? '' : 's'}`);
+    // A fully successful import (players added, nothing to review, no unrecognized names) folds the tools away.
+    if (fresh.length > 0 && result.review.length === 0 && result.unrecognized.length === 0) {
+      closeEntry();
+      return result;
+    }
     setOutcome(result);
     return result;
   };
@@ -89,14 +103,7 @@ export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
       <section className="panel">
         <div className="panel-head">
           <h2>Roster</h2>
-          <span className="counts">
-            <span>
-              Roster <b className={active > state.league.rosterSize ? 'over' : ''}>{active}</b>/{state.league.rosterSize}
-            </span>
-            <span>
-              IR <b className={ir > state.league.irSlots ? 'over' : ''}>{ir}</b>/{state.league.irSlots}
-            </span>
-          </span>
+          {/* No counts or league summary here (owner requests 2026-11-26); the Roster tab shows the player count. */}
           {state.roster.length > 0 && (
             <button className="btn small" onClick={onGoLineup}>
               View Lineup →
@@ -104,45 +111,68 @@ export function RosterView({ onGoLineup }: { onGoLineup: () => void }) {
           )}
         </div>
         <div className="panel-body stack roster-body">
-          {setupLine && <div className="roster-setup">{setupLine}</div>}
-          <div className="mode-switch modes-3" role="tablist" aria-label="Add players">
-            {INPUT_MODES.map((m) => (
-              <button key={m.id} role="tab" aria-selected={mode === m.id} onClick={() => setMode(m.id)}>
-                {/* One word per line, so all three labels are two lines; the space keeps the accessible name. */}
-                {m.label.split(' ').map((w, i) => (
-                  <Fragment key={i}>
-                    {i > 0 && ' '}
-                    <span className="mode-word">{w}</span>
-                  </Fragment>
-                ))}
-              </button>
-            ))}
-          </div>
-          {state.roster.length > 0 && (
-            <div className="clear-roster-row">
+          {/* Action row (2026-11-26): Add Players (while the tools are folded) and Clear Roster to its right, which
+              stays visible whether the tools are open or folded (it only shows when the roster has players). */}
+          {(!showEntry || state.roster.length > 0) && (
+            <div className="roster-actions">
+              {!showEntry && (
+                <button className="btn primary" aria-expanded={false} aria-controls="roster-entry" onClick={() => setEntryOpen(true)}>
+                  Add Players
+                </button>
+              )}
               <ClearRosterButton />
             </div>
           )}
-          {mode === 'search' && (
-            <div className="add-bar">
-              <PlayerSearch onPick={add} exclude={onRoster} placeholder="Add a player by name…" />
+          {showEntry && (
+            <>
+            {/* The switcher with, once the roster has players, a collapse chevron at its right (replaced Done, 2026-11-26). */}
+            <div className="entry-head" id="roster-entry">
+              <div className="mode-switch modes-3" role="tablist" aria-label="Add players">
+                {INPUT_MODES.map((m) => (
+                  <button key={m.id} role="tab" aria-selected={mode === m.id} onClick={() => setMode(m.id)}>
+                    {/* One word per line, so all three labels are two lines; the space keeps the accessible name. */}
+                    {m.label.split(' ').map((w, i) => (
+                      <Fragment key={i}>
+                        {i > 0 && ' '}
+                        <span className="mode-word">{w}</span>
+                      </Fragment>
+                    ))}
+                  </button>
+                ))}
+              </div>
+              {state.roster.length > 0 && (
+                <button type="button" className="entry-collapse" aria-label="Collapse player tools" aria-expanded={true} aria-controls="roster-entry" onClick={closeEntry}>
+                  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                    <path d="M5.5 15 12 8.5 18.5 15" fill="none" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              )}
             </div>
-          )}
-          {mode === 'paste' && <PasteBox onImport={importText} />}
-          {mode === 'image' && <ImageBox onImport={importText} />}
-          {outcome && mode !== 'search' && (
-            <ImportReview
-              outcome={outcome}
-              onChange={(review) => setOutcome({ ...outcome, review })}
-              onDone={(ids) => {
-                if (ids.length) {
-                  dispatch({ type: 'addPlayers', ids });
-                  toast(`Added ${ids.length} player${ids.length === 1 ? '' : 's'}`);
-                }
-                setOutcome(null);
-              }}
-              onRoster={onRoster}
-            />
+            {mode === 'search' && (
+              <div className="add-bar">
+                <PlayerSearch onPick={add} exclude={onRoster} placeholder="Add a player by name…" />
+              </div>
+            )}
+            {mode === 'paste' && <PasteBox onImport={importText} />}
+            {mode === 'image' && <ImageBox onImport={importText} />}
+            {outcome && mode !== 'search' && (
+              <ImportReview
+                outcome={outcome}
+                onChange={(review) => setOutcome({ ...outcome, review })}
+                onDone={(ids) => {
+                  if (ids.length) {
+                    dispatch({ type: 'addPlayers', ids });
+                    toast(`Added ${ids.length} player${ids.length === 1 ? '' : 's'}`);
+                  }
+                  // The import is finished once its review is: with players on the roster, Done here folds the tools
+                  // away like the collapse chevron (both mean "finished adding").
+                  if (ids.length > 0 || state.roster.length > 0) closeEntry();
+                  else setOutcome(null);
+                }}
+                onRoster={onRoster}
+              />
+            )}
+            </>
           )}
           {issues.length > 0 && (
             <div className="notice" role="alert">
@@ -176,6 +206,7 @@ function PasteBox({ onImport }: { onImport: (text: string) => ImportOutcome }) {
     <div className="stack" style={{ gap: 8 }}>
       <p className="paste-hint">Paste your roster page - player names detected automatically</p>
       <textarea
+        className="paste-box"
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder={'Connor McDavid\nQuinn Hughes, VAN\nIgor Shesterkin\n…'}

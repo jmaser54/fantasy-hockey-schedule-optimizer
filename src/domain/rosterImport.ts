@@ -84,6 +84,13 @@ function umlautPatterns(name: string): { full: RegExp; initial: RegExp } | undef
 }
 
 /** First initial + the rest of a normalized name: "connor mcdavid" → "c mcdavid", "tj hughes" → "t hughes". */
+/** How many directory players share this player's surname (everything after the first name). */
+function surnameHolders(player: Player, index: PlayerIndex): number {
+  const surname = (n: string) => n.split(' ').slice(1).join(' ');
+  const own = surname(normalizeName(player.name));
+  return index.all.filter((p) => surname(normalizeName(p.name)) === own).length;
+}
+
 function initialKey(normalized: string): string | undefined {
   const parts = normalized.split(' ');
   return parts.length >= 2 ? `${parts[0]![0]} ${parts.slice(1).join(' ')}` : undefined;
@@ -185,12 +192,22 @@ export interface ExtractedRoster {
 
 const NAME_TOKEN = /^(?:[A-ZÀ-Þ][A-Za-zÀ-ÿ'’.-]*|[A-Z]\.)$/;
 /** Words that make a name-like phrase obviously page furniture rather than a missing player. */
-const PAGE_WORDS = new Set(
-  'my team teams roster rosters player players league leagues week weeks today daily season stats points point total totals period scoring waiver waivers position positions free agent agents trade trades lineup lineups edit move bench starters reserve reserves injured matchup matchups schedule settings standings news research projections projected opponent opp status fantasy hockey home add drop players skaters goalies forwards defense active the of and in on at vs final pm am'.split(' '),
-);
+const PAGE_WORDS = new Set([
+  ...'my team teams roster rosters player players league leagues week weeks today daily season stats points point total totals period scoring waiver waivers position positions free agent agents trade trades lineup lineups edit move bench starters reserve reserves injured matchup matchups schedule settings standings news research projections projected opponent opp status fantasy hockey home add drop players skaters goalies forwards defense active the of and in on at vs final pm am'.split(' '),
+  // ESPN stat column headings ("Power Play Shorthanded"). Not "power": Owen Power is a player.
+  ...'play powerplay shorthanded goals assists shots blocked penalty minutes hits faceoffs wins saves percentage shutouts against average'.split(' '),
+]);
 
 function lineTokens(line: string): string[] {
   return line
+    // OCR reads an initial S as "§" or "$" ("§. Gostisbehere", "$: Gostisbehere"): before ". Name" it is the letter S.
+    .replace(/(^|\s)[§$](?=[.:]\s*[A-ZÀ-Þ])/g, '$1S')
+    // …and its dot as a colon ("S: Gostisbehere"): a lone capital + colon before a name word is an initial.
+    .replace(/(^|\s)([A-Z]):(?=\s*[A-ZÀ-Þ][a-zà-ÿ])/g, '$1$2.')
+    // …or as a hyphen ("Co S-Gostisbehere", "T-Stutzle", seen on an ESPN screenshot 2026-11-27): a single
+    // capital joined by a hyphen to a name word is an initial. Real hyphenated names ("Ekman-Larsson",
+    // "Jean-Gabriel") have more than one letter before the hyphen, so they are untouched.
+    .replace(/(^|[^A-Za-zÀ-ÿ])([A-Z])-(?=[A-ZÀ-Þ][a-zà-ÿ])/g, '$1$2. ')
     .replace(/[•·|\t()[\]{}]/g, ' ')
     .replace(/\b([A-Z])\.(?=[A-Za-zÀ-ÿ])/g, '$1. ') // OCR often drops the space after an initial ("A.Fox")
     .split(/\s+/)
@@ -272,24 +289,32 @@ export function extractRosterNames(text: string, index: PlayerIndex, teamIds: Re
     }
     if (found) continue;
     // 2. First initial + last name ("C. McDavid", OCR "C McDavid" or "GD. Tarasov" with the slot run in):
-    // automatic when the directory has exactly one such player, a review when several share it.
+    // automatic when the directory has exactly one such player, a review when several share it. OCR noise
+    // glued to the initial (a headshot read as "co": "coS. Gostisbehere") and a comma read for its dot
+    // ("S, Gostisbehere"; a colon is turned into a dot in lineTokens) still count as a dotted initial; the
+    // rest must still name exactly one player. A slot pill run into an initial that also lost its dot
+    // ("BT Stutzle" on the owner's ESPN screenshot, 2026-11-27) is read the same way; team codes ("OTT") and
+    // slot labels themselves ("LW", "BN": their last letter is the label's, the initial may be lost) are not.
+    // It is added at once only when the surname belongs to one player in the whole directory (so a misread
+    // or stray letter can't pick another player); otherwise it is a suggestion.
     for (let i = 0; i < tokens.length && !found; i++) {
-      const init = /^(?:[A-Z]{0,2}([A-Z])\.|([ABEHIJKLMNOPQRSTVXYZ]))$/.exec(tokens[i]!);
-      if (!init) continue;
+      const init = /^(?:[a-z]{0,3}[A-Z]{0,2}([A-Z])[.,]|([ABEHIJKLMNOPQRSTVXYZ])|[a-z]{0,3}[A-Z]{1,2}([A-Z]))$/.exec(tokens[i]!);
+      if (!init || (init[3] && (teamIds.has(tokens[i]!) || NOISE_TOKEN.test(tokens[i]!)))) continue;
+      const letter = (init[1] ?? init[2] ?? init[3])!;
       for (let k = Math.min(3, tokens.length - i - 1); k >= 1; k--) {
         const rest = normalizeName(tokens.slice(i + 1, i + 1 + k).join(' '));
         if (!rest || /\d/.test(rest)) continue;
-        const key = `${(init[1] ?? init[2])!.toLowerCase()} ${rest}`;
+        const key = `${letter.toLowerCase()} ${rest}`;
         let same = index.byInitial.get(key) ?? [];
         if (same.length === 0) {
           const u = index.umlauts.filter((x) => x.initial.test(key));
           if (u.length === 1) same = [u[0]!.player];
         }
         if (same.length === 0) continue;
-        const name = `${(init[1] ?? init[2])!}. ${tokens.slice(i + 1, i + 1 + k).join(' ')}`;
+        const name = `${letter}. ${tokens.slice(i + 1, i + 1 + k).join(' ')}`;
         const teamHint = teamNear(tokens, i + 1 + k, teamIds);
         // An initial without its dot and with no team beside it ("P Kane said") is weaker evidence: suggest it.
-        const sure = !!init[1] || !!teamHint;
+        const sure = !!init[1] || (!!init[2] && !!teamHint) || (!!init[3] && same.length === 1 && surnameHolders(same[0]!, index) === 1);
         addFound(
           raw,
           name,

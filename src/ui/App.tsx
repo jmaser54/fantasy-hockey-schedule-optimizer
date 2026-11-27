@@ -4,42 +4,51 @@ import { takeContactReturn } from '../contact.ts';
 import { buildPlayerLookup, isStale, loadDataset, type DataStatus } from '../data/load.ts';
 import { dayCount, eachDate, formatRange, formatShort, isValidISODate, easternToday, nextWeek } from '../domain/dates.ts';
 import { expandSeats, freezeOverride, optimizeDates, summarize, type DayResult, type LineupPlayer } from '../domain/optimizer.ts';
-import { activeSlotCount } from '../domain/league.ts';
+import { isLeagueComplete } from '../domain/league.ts';
 import { toLineupPlayers } from '../domain/roster.ts';
 import type { ISODate, Player } from '../domain/types.ts';
-import { STORAGE_KEY, deserialize, loadFromStorage, reducer, saveToStorage } from '../state/appState.ts';
+import { STORAGE_KEY, deserialize, loadFromStorage, reducer, saveToStorage, setupNeeds } from '../state/appState.ts';
 import { Ctx, useApp, type AppCtx, type Window } from './context.ts';
 import { AboutView } from './About.tsx';
 import { EvaluatorView } from './Evaluator.tsx';
 import { ContactForm } from './Contact.tsx';
 import { LineupView } from './Lineup.tsx';
-import { RankingsView } from './Rankings.tsx';
+import { GridView, RankingsView } from './Rankings.tsx';
 import { RosterView } from './Roster.tsx';
-import { SettingsModal } from './Settings.tsx';
+import { LeagueSettingsPage } from './Settings.tsx';
 import { TradesView } from './Trades.tsx';
 
 const TABS = [
-  { id: 'rankings', label: 'Team Schedules', short: 'Schedules' },
-  { id: 'roster', label: 'Roster' },
+  // Order and labels: owner decision 2026-11-24 (Schedules and Grid were one "Team Schedules" page).
+  { id: 'rankings', label: 'Schedules' },
+  { id: 'grid', label: 'Grid' },
   { id: 'lineup', label: 'Lineup' },
   { id: 'trades', label: 'Trade Lab' },
 ] as const;
 /** Player Evaluator's destinations (no period bar). */
 const EVALUATOR_TABS = [
-  { id: 'evaluator', label: 'Roster Evaluation' },
+  { id: 'evaluator', label: 'My Players' },
   { id: 'player-rankings', label: 'Player Rankings' },
 ] as const;
-const ALL_TABS = [...TABS, ...EVALUATOR_TABS];
+/** My Team's destinations (2026-11-26): the roster (#roster kept for old links) and League Settings, once a dialog. */
+const TEAM_TABS = [
+  { id: 'roster', label: 'My Roster' },
+  { id: 'league-settings', label: 'League Settings' },
+] as const;
+const ALL_TABS = [...TABS, ...EVALUATOR_TABS, ...TEAM_TABS];
 type TabId = (typeof ALL_TABS)[number]['id'];
 const isEvaluatorTab = (t: TabId) => EVALUATOR_TABS.some((e) => e.id === t);
+const isTeamTab = (t: TabId) => TEAM_TABS.some((e) => e.id === t);
 
-/** The two equal product areas (primary navigation); each shows its own destinations beneath. */
-type AreaId = 'planner' | 'evaluator';
+/** The product areas (primary navigation), in this order; each shows its own destinations beneath. */
+type AreaId = 'planner' | 'evaluator' | 'team';
 const AREAS: { id: AreaId; label: string; first: TabId }[] = [
   { id: 'planner', label: 'Games Optimizer', first: 'rankings' },
   { id: 'evaluator', label: 'Player Normalizer', first: 'evaluator' },
+  { id: 'team', label: 'My Team', first: 'roster' },
 ];
-const areaOf = (t: TabId): AreaId => (isEvaluatorTab(t) ? 'evaluator' : 'planner');
+const AREA_TABS: Record<AreaId, readonly { id: TabId; label: string }[]> = { planner: TABS, evaluator: EVALUATOR_TABS, team: TEAM_TABS };
+const areaOf = (t: TabId): AreaId => (isEvaluatorTab(t) ? 'evaluator' : isTeamTab(t) ? 'team' : 'planner');
 
 const isAboutHash = () => globalThis.location?.hash === '#about';
 
@@ -54,7 +63,6 @@ export function App() {
   const [status, setStatus] = useState<DataStatus>({ state: 'loading' });
   const [tab, setTab] = useState<TabId>(tabFromHash);
   const [about, setAbout] = useState(isAboutHash);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(() => (takeContactReturn() ? 'Message sent. Thanks for getting in touch!' : (notice ?? null)));
   const [saveFailed, setSaveFailed] = useState(false);
@@ -95,9 +103,17 @@ export function App() {
     trackTabView(ALL_TABS.find((t) => t.id === tab)!.label);
   }, [tab]);
 
+  // League Settings registers a check here while it has unsaved edits; leaving asks first.
+  const leaveGuard = useRef<(() => boolean) | null>(null);
+  const tabNow = useRef(tab);
+  tabNow.current = tab;
   useEffect(() => {
     // #about opens the About page and keeps the current tab to return to.
     const onHash = () => {
+      if (tabNow.current === 'league-settings' && leaveGuard.current && !leaveGuard.current()) {
+        history.replaceState(null, '', '#league-settings');
+        return;
+      }
       if (isAboutHash()) return setAbout(true);
       setAbout(false);
       setTab(tabFromHash());
@@ -118,11 +134,14 @@ export function App() {
   const lastTab = useRef<Partial<Record<AreaId, TabId>>>({});
   lastTab.current[area] = tab;
   const go = (id: TabId) => {
+    if (tab === 'league-settings' && id !== tab && leaveGuard.current && !leaveGuard.current()) return;
     history.replaceState(null, '', `#${id}`);
     setTab(id);
     setAbout(false);
   };
   useEffect(() => window.scrollTo(0, 0), [about]);
+  // Muted "needs your input" marks on League Settings and Roster (2026-11-26), each cleared only by completing it.
+  const needs = setupNeeds(state);
 
   return (
     <>
@@ -131,7 +150,7 @@ export function App() {
           <div className="brand">
             Playoff <span>Planner</span>
           </div>
-          <p className="tagline">Plan your next week — and your playoff run. Add your roster to see which pickups are worth it.</p>
+          <p className="tagline">Plan your next week — and your playoff run. Add your roster to see the best moves for your team.</p>
         </div>
       </header>
       <div className="tabbar">
@@ -146,41 +165,35 @@ export function App() {
                 onClick={() => area !== a.id && go(lastTab.current[a.id] ?? a.first)}
               >
                 {a.label}
+                {a.id === 'team' && (needs.roster || needs.league) && <NeedsMark />}
               </button>
             ))}
           </nav>
-          <button className="settings-btn" onClick={() => setSettingsOpen(true)} title="Review and adjust your league settings">
-            <span aria-hidden="true">⚙︎</span> League Settings
-          </button>
+          <span id="needs-input" hidden>
+            Needs your input
+          </span>
         </div>
         <div className="topbar-inner tabbar-row">
-          {area === 'planner' ? (
-            <nav className="tabs planner-tabs" role="tablist" aria-label="Games Optimizer">
-              {TABS.map((t) => (
-                <button key={t.id} role="tab" className="tab" aria-selected={!about && tab === t.id} aria-label={'short' in t ? t.label : undefined} onClick={() => go(t.id)}>
-                  {'short' in t ? (
-                    <>
-                      <span className="label-full">{t.label}</span>
-                      <span className="label-short" aria-hidden="true">
-                        {t.short}
-                      </span>
-                    </>
-                  ) : (
-                    t.label
-                  )}
-                  {t.id === 'roster' && state.roster.length > 0 && <span className="count">{state.roster.length}</span>}
-                </button>
-              ))}
-            </nav>
-          ) : (
-            <nav className="tabs evaluator-tabs" role="tablist" aria-label="Player Normalizer">
-              {EVALUATOR_TABS.map((t) => (
-                <button key={t.id} role="tab" className="tab" aria-selected={!about && tab === t.id} onClick={() => go(t.id)}>
+          <nav className={`tabs ${area}-tabs`} role="tablist" aria-label={AREAS.find((a) => a.id === area)!.label}>
+            {AREA_TABS[area].map((t) => {
+              // Each "needs your input" mark clears on its own (roster has a player / league complete).
+              const mark = (t.id === 'roster' && needs.roster) || (t.id === 'league-settings' && needs.league);
+              return (
+                <button
+                  key={t.id}
+                  role="tab"
+                  className="tab"
+                  aria-selected={!about && tab === t.id}
+                  aria-describedby={mark ? 'needs-input' : undefined}
+                  onClick={() => go(t.id)}
+                >
                   {t.label}
+                  {t.id === 'roster' && state.roster.length > 0 && <span className="count">{state.roster.length}</span>}
+                  {mark && <NeedsMark />}
                 </button>
-              ))}
-            </nav>
-          )}
+              );
+            })}
+          </nav>
         </div>
       </div>
       <main>
@@ -198,15 +211,14 @@ export function App() {
             dispatch={dispatch}
             data={status.data}
             toast={toast}
-            periodBar={!about && !isEvaluatorTab(tab)}
-            showModes={tab !== 'roster'}
-            setupInPage={!about && tab === 'roster'}
-            onOpenSettings={() => setSettingsOpen(true)}
-            overlay={settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+            periodBar={!about && area === 'planner'}
+            onOpenSettings={() => go('league-settings')}
           >
             {about && <AboutView />}
             {!about && tab === 'rankings' && <RankingsView onGoRoster={() => go('roster')} />}
+            {!about && tab === 'grid' && <GridView />}
             {!about && tab === 'roster' && <RosterView onGoLineup={() => go('lineup')} />}
+            {!about && tab === 'league-settings' && <LeagueSettingsPage leaveGuard={leaveGuard} />}
             {!about && tab === 'lineup' && <LineupView onGoRoster={() => go('roster')} />}
             {!about && tab === 'trades' && <TradesView onGoRoster={() => go('roster')} />}
             {/* One element for both destinations, so the shared state survives switching between them. */}
@@ -299,13 +311,9 @@ function Ready(props: {
   dispatch: AppCtx['dispatch'];
   data: AppCtx['data'];
   toast: AppCtx['toast'];
+  /** Games Optimizer destinations only (not Player Normalizer, My Team or About). */
   periodBar: boolean;
-  /** False on Roster: no period toggle there (its Games column always shows next week). */
-  showModes: boolean;
-  /** The page shows the setup line itself (Roster: under its heading row), so it isn't rendered above. */
-  setupInPage?: boolean;
   onOpenSettings: () => void;
-  overlay: React.ReactNode;
   children: React.ReactNode;
 }) {
   const { state, dispatch, data, toast } = props;
@@ -368,10 +376,10 @@ function Ready(props: {
   // star changes leave every manually edited day as it is. What the user sees is unchanged.
   useEffect(() => {
     const older = Object.entries(state.manual).filter(([, o]) => !o.lineup);
-    if (older.length === 0) return;
+    if (older.length === 0 || !isLeagueComplete(state.league)) return;
     const seats = expandSeats(state.league.slots);
     for (const [date, o] of older) dispatch({ type: 'setManual', date, override: freezeOverride(date, lineupPlayers, seats, data.schedule, o) });
-  }, [state.manual, state.league.slots, lineupPlayers, data.schedule, dispatch]);
+  }, [state.manual, state.league, lineupPlayers, data.schedule, dispatch]);
 
   const allDates = useMemo(() => [...new Set(windows.flatMap((w) => w.dates))].sort(), [windows]);
   const days = useMemo(
@@ -401,28 +409,15 @@ function Ready(props: {
     days,
     summarizeWindow,
     toast,
-    setupLine: props.periodBar && props.setupInPage ? <SetupLine mode={mode} hasWindow={!!selected} onOpen={props.onOpenSettings} /> : undefined,
+    openSettings: props.onOpenSettings,
   };
   const controls: PeriodControls = { mode, setMode, customPeriods, setCustomPeriods, customTotal, setCustomTotal };
   return (
     <Ctx.Provider value={ctx}>
-      {props.periodBar && props.showModes && <PeriodBar {...controls} hasWindow={!!selected} />}
-      {props.periodBar && !props.setupInPage && <SetupLine mode={mode} hasWindow={!!selected} onOpen={props.onOpenSettings} />}
-      {props.periodBar && props.showModes && !selected ? <div className="empty">Enter a start and end date for your period above.</div> : props.children}
-      {props.overlay}
+      {props.periodBar && <PeriodBar {...controls} hasWindow={!!selected} />}
+      {/* The league summary line shows only on the Roster tab (in-page); removed from the other tabs 2026-11-26. */}
+      {props.periodBar && !selected ? <div className="empty">Enter a start and end date for your period above.</div> : props.children}
     </Ctx.Provider>
-  );
-}
-
-/** Quiet summary of the league setup; opens League Settings. */
-function SetupLine({ mode, hasWindow, onOpen }: { mode: Mode; hasWindow: boolean; onOpen: () => void }) {
-  const { state, selected } = useApp();
-  const parts = [`${state.league.rosterSize} roster`, `${state.league.irSlots} IR`, `${activeSlotCount(state.league)} starters`];
-  if (mode === 'playoffs' && hasWindow) parts.push(`${selected.name}: ${formatRange(selected.start, selected.end)}`);
-  return (
-    <button type="button" className="setup-line" onClick={onOpen} title="Open League Settings">
-      {parts.join(' · ')}
-    </button>
   );
 }
 
@@ -512,5 +507,14 @@ function CustomEditor({ customPeriods, setCustomPeriods, customTotal, setCustomT
         )}
       </div>
     </div>
+  );
+}
+
+/** Small, muted "!" marking a section that still needs the user's input (described by #needs-input). */
+function NeedsMark() {
+  return (
+    <span className="needs-mark" aria-hidden="true">
+      !
+    </span>
   );
 }

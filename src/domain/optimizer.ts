@@ -17,7 +17,9 @@
  *
  * Priorities and daily choices:
  * - Players are offered seats in priority order (Preferred first, then roster
- *   order). Kuhn's algorithm never unmatches a matched player, so this is the
+ *   order). After every player with a game, players without one fill any seat
+ *   still empty (2026-11-24, ESPN-style: the lineup shows the roster's real
+ *   composition); they add no games and never displace a player with a game. Kuhn's algorithm never unmatches a matched player, so this is the
  *   greedy algorithm on the transversal matroid of playing players: the lineup
  *   still fills the maximum number of seats, and among all such lineups it
  *   seats as many Preferred players as possible (ties by roster order).
@@ -201,11 +203,17 @@ export function moveInLineup(
   return { ...lineup, [target.key]: id };
 }
 
-/** The automatic lineup: seat index → player id. */
-function assignAutomatically(playing: readonly LineupPlayer[], seats: readonly Seat[]): (string | undefined)[] {
+/**
+ * The automatic lineup: seat index → player id. Players with a game go first (priority order), then
+ * players without one fill any seat still empty (ESPN-style: the lineup shows the roster's real
+ * composition). Kuhn's algorithm never unseats an earlier player, so who plays is exactly as with the
+ * playing players alone; the fillers add no games.
+ */
+function assignAutomatically(playing: readonly LineupPlayer[], idle: readonly LineupPlayer[], seats: readonly Seat[]): (string | undefined)[] {
+  const ordered = [...playing, ...idle];
   const out: (string | undefined)[] = new Array(seats.length).fill(undefined);
-  assignInOrder(playing, seats).forEach((s, i) => {
-    if (s !== -1) out[s] = playing[i]!.id;
+  assignInOrder(ordered, seats).forEach((s, i) => {
+    if (s !== -1) out[s] = ordered[i]!.id;
   });
   return out;
 }
@@ -231,6 +239,8 @@ export function optimizeDay(
   const statusById = new Map(statuses.map((s) => [s.playerId, s]));
 
   const playing = priorityOrder(roster.filter((p) => !p.onIr && statusById.get(p.id)!.game));
+  // Non-IR players without a game: they fill seats nobody with a game can take (2026-11-24).
+  const idle = priorityOrder(roster.filter((p) => !p.onIr && !statusById.get(p.id)!.game));
   const optimalUsable = assignInOrder(playing, seats).filter((s) => s !== -1).length;
 
   const manualIssues: string[] = [];
@@ -246,7 +256,7 @@ export function optimizeDay(
     const fits = Object.keys(lineup).length === seats.length && seats.every((seat) => seat.key in lineup);
     if (!fits) {
       manualIssues.push('Your league’s lineup slots changed, so your changes for this day no longer apply.');
-      seatPlayer = assignAutomatically(playing, seats);
+      seatPlayer = assignAutomatically(playing, idle, seats);
     } else {
       const used = new Set<string>();
       seats.forEach((seat, i) => {
@@ -274,7 +284,8 @@ export function optimizeDay(
 
     // Starts first (playing ones before ones without a game, each in priority order), then everyone else playing and not sat.
     const startOrder = [...playing.filter((p) => started.has(p.id)), ...priorityOrder(roster.filter((p) => started.has(p.id) && !statusById.get(p.id)!.game))];
-    const ordered = [...startOrder, ...playing.filter((p) => !started.has(p.id) && !sat.has(p.id))];
+    // Then players without a game fill the seats still empty (after every player with a game).
+    const ordered = [...startOrder, ...playing.filter((p) => !started.has(p.id) && !sat.has(p.id)), ...idle.filter((p) => !started.has(p.id) && !sat.has(p.id))];
     const assignment = assignInOrder(ordered, seats);
     ordered.forEach((p, i) => {
       const s = assignment[i]!;

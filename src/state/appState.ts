@@ -1,5 +1,5 @@
 import { isValidISODate } from '../domain/dates.ts';
-import { DEFAULT_LEAGUE, DEFAULT_PERIODS, validateLeague } from '../domain/league.ts';
+import { DEFAULT_LEAGUE, DEFAULT_PERIODS, NEW_USER_LEAGUE, isLeagueComplete, validateLeague } from '../domain/league.ts';
 import { isEmptyOverride, type DayOverride } from '../domain/optimizer.ts';
 import { POSITIONS, type ISODate, type LeagueConfig, type Period, type Player, type Position, type RosterEntry } from '../domain/types.ts';
 
@@ -38,10 +38,16 @@ export interface AppState {
 
 export const EMPTY_SCENARIO: Scenario = { drops: [], adds: [] };
 
+/** What still needs the user's input (2026-11-26): each clears on its own, never by visiting a tab. */
+export function setupNeeds(state: Pick<AppState, 'league' | 'roster'>): { league: boolean; roster: boolean } {
+  return { league: !isLeagueComplete(state.league), roster: state.roster.length === 0 };
+}
+
 export function initialState(): AppState {
   return {
     version: STATE_VERSION,
-    league: structuredClone(DEFAULT_LEAGUE),
+    // New users start with a blank league (roster size, IR slots, slot counts); playoff rounds keep their defaults.
+    league: structuredClone(NEW_USER_LEAGUE),
     periods: structuredClone(DEFAULT_PERIODS),
     custom: { start: DEFAULT_PERIODS[0]!.start, end: DEFAULT_PERIODS[DEFAULT_PERIODS.length - 1]!.end },
     selection: DEFAULT_PERIODS[0]!.id,
@@ -65,6 +71,8 @@ export type Action =
   | { type: 'clearRoster' }
   | { type: 'setManual'; date: ISODate; override: DayOverride | null }
   | { type: 'clearManual'; dates?: ISODate[] }
+  /** Move a player to or from IR and save the re-optimized days in one step (`planIrChange`). */
+  | { type: 'applyIrChange'; id: string; onIr: boolean; manual: Record<ISODate, DayOverride | null> }
   | { type: 'scenario'; scenario: Scenario }
   | { type: 'scenarioApply' }
   /** Saved data changed in another tab: show it here too. */
@@ -159,6 +167,11 @@ export function reducer(state: AppState, action: Action): AppState {
       for (const d of action.dates) delete manual[d];
       return { ...state, manual };
     }
+    case 'applyIrChange': {
+      let next = reducer(state, { type: 'updateEntry', id: action.id, patch: { onIr: action.onIr } });
+      for (const [date, override] of Object.entries(action.manual)) next = reducer(next, { type: 'setManual', date, override });
+      return next;
+    }
     case 'scenario':
       return { ...state, scenario: action.scenario };
     case 'load':
@@ -178,19 +191,23 @@ export function reducer(state: AppState, action: Action): AppState {
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isPositions = (v: unknown): v is Position[] => Array.isArray(v) && v.every((p) => POSITIONS.includes(p as Position));
 
+/** A saved blank field is null (JSON has no NaN); a missing one is invalid. */
+const leagueNum = (x: unknown) => (x === null ? NaN : x === undefined ? -1 : Number(x));
+
 function loadLeague(v: unknown): LeagueConfig | undefined {
   if (!isObj(v) || !Array.isArray(v.slots)) return undefined;
   const league: LeagueConfig = {
-    rosterSize: Number(v.rosterSize),
-    irSlots: Number(v.irSlots),
+    rosterSize: leagueNum(v.rosterSize),
+    irSlots: leagueNum(v.irSlots),
     slots: v.slots.filter(isObj).map((s) => ({
       id: String(s.id),
       label: String(s.label ?? s.id),
-      count: Number(s.count),
+      count: leagueNum(s.count),
       accepts: isPositions(s.accepts) ? s.accepts : [],
     })),
   };
-  return validateLeague(league).length === 0 ? league : undefined;
+  // Blank fields are kept as blank (an unfinished new-user setup); anything else invalid is rejected.
+  return validateLeague(league, { allowBlank: true }).length === 0 ? league : undefined;
 }
 
 function loadPeriods(v: unknown): Period[] | undefined {
@@ -271,7 +288,9 @@ export function deserialize(raw: string | null): { state: AppState; notice?: str
       : base.custom;
   const state: AppState = {
     ...base,
-    league: league ?? base.league,
+    // Saved data means an existing user: an unreadable saved league falls back to the standard defaults
+    // as before, never to the new-user blank league.
+    league: league ?? structuredClone(DEFAULT_LEAGUE),
     periods: periods ?? base.periods,
     custom,
     selection: typeof data.selection === 'string' ? data.selection : base.selection,

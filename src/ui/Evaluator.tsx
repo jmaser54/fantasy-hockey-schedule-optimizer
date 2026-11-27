@@ -20,6 +20,7 @@ import type { Player } from '../domain/types.ts';
 import { clearComparisons, loadEvaluatorPrefs, saveEvaluatorPrefs, type EvaluatorPrefs } from '../state/evaluatorPrefs.ts';
 import { useApp } from './context.ts';
 import { InfoTip } from './common.tsx';
+import { StickyHeadTable } from './StickyHead.tsx';
 import { adjustedDecimals, formatAdjusted, formatStat, mergeComparisons, POSITION_SHORT, searchSkaters, seasonLabel, sortRows, STAT_GROUPS, STAT_SHORT, type StatGroupId } from './evaluatorFormat.ts';
 
 /**
@@ -152,17 +153,18 @@ function Evaluator({ file, page, onGoRoster }: { file: SkaterStatsFile; page: Ev
     <div className="stack evaluator">
       <div className="eval-head">
         <div>
-          <h2 className="eval-title">{page === 'roster' ? 'Roster Evaluation' : 'Player Rankings'}</h2>
-          <p className="eval-sub">
-            {page === 'roster' ? 'Your skaters’ production, normalized to the same number of games.' : 'Every NHL skater’s production, normalized to your benchmark.'}
-          </p>
+          <h2 className="eval-title">{page === 'roster' ? 'My Players' : 'Player Rankings'}</h2>
+          <p className="eval-sub">{page === 'roster' ? 'Your skaters’ stats, normalized to a benchmark.' : 'NHL skater stats, normalized to your benchmark.'}</p>
         </div>
+        {/* The "NHL stats updated <date>" line was removed (2026-11-26): the footer shows the data date. The stale warning stays. */}
         {historical ? (
           <span className="small muted">NHL {label} regular season (final)</span>
         ) : (
-          <span className={stale ? 'badge warn' : 'small muted'} title={`NHL regular-season stats, fetched ${file.fetchedAt.replace('T', ' ').slice(0, 16)} UTC`}>
-            {stale ? `Stats from ${when}, may be outdated` : `NHL stats updated ${when}`}
-          </span>
+          stale && (
+            <span className="badge warn" title={`NHL regular-season stats, fetched ${file.fetchedAt.replace('T', ' ').slice(0, 16)} UTC`}>
+              Stats from {when}, may be outdated
+            </span>
+          )
         )}
       </div>
 
@@ -203,14 +205,18 @@ function Evaluator({ file, page, onGoRoster }: { file: SkaterStatsFile; page: Ev
             totals={totals}
             noGames={historical ? `No NHL games in ${label}` : undefined}
             seasonText={label}
-            footer={
+            compare={
               <div className="ev-cmp-row">
                 <ComparisonSearch skaters={shown!.skaters} exclude={new Set([...result.rosterNhlIds, ...prefs.comparisons])} teamOf={teamOf} onAdd={addComparison} />
-                {result.evaluation.comparisons.length > 0 && (
-                  <button type="button" className="btn small" onClick={clearAllComparisons}>
-                    Clear comparison players
-                  </button>
-                )}
+                {/* Always shown (2026-11-26): crimson outline when there is something to clear, neutral and disabled otherwise. */}
+                <button
+                  type="button"
+                  className={`btn small ev-clear ${result.evaluation.comparisons.length > 0 ? 'has-items' : ''}`}
+                  disabled={result.evaluation.comparisons.length === 0}
+                  onClick={clearAllComparisons}
+                >
+                  Clear comparison players
+                </button>
               </div>
             }
           />
@@ -291,6 +297,11 @@ function BenchmarkBar(props: {
         <div className="bench-value">
           {totals ? (
             <b>Full-season totals</b>
+          ) : benchmark.available && benchmark.basis === 'per-game' ? (
+            // Per game said "Normalized to 1 GP", which reads as a data error (2026-11-26).
+            <>
+              Stats <b>per game played</b>
+            </>
           ) : benchmark.available ? (
             <>
               Normalized to <b>{benchmark.gamesPlayed} GP</b>
@@ -501,7 +512,8 @@ function RosterPanel(props: {
   emptyRoster: boolean;
   onGoRoster: () => void;
   goalies: string[];
-  footer: React.ReactNode;
+  /** Compare a player / Clear comparison players: a row under the stat groups, above the table (2026-11-26). */
+  compare: React.ReactNode;
   sortBasis: SortBasis;
   onSortBasis: (v: SortBasis) => void;
   /** Full season: cells show the actual totals only. */
@@ -518,6 +530,7 @@ function RosterPanel(props: {
   const onSort = (key: StatKey) => setSort((s) => (s?.key === key ? (s.dir === 'desc' ? { key, dir: 'asc' } : null) : { key, dir: 'desc' }));
   // Comparison players sit among rostered players by position, and join the same sort.
   const merged = mergeComparisons(props.roster, props.comparisons);
+  const showTable = !props.emptyRoster || props.comparisons.length > 0;
   const rows = sort ? sortRows(merged, sort.key, sort.dir, !props.totals && props.sortBasis === 'normalized' && isScaledStat(sort.key)) : merged;
 
   const row = (s: EvaluatedSubject) => {
@@ -558,54 +571,51 @@ function RosterPanel(props: {
   return (
     <div className="panel">
       <div className="panel-head">
-        <h2>Your roster</h2>
         {!props.totals && <SortBasisMenu value={props.sortBasis} onChange={props.onSortBasis} />}
         <StatGroupToggle group={group} onChange={setGroup} />
       </div>
+      {props.compare}
       {props.emptyRoster ? (
         <div className="empty">
           <strong>No roster yet</strong>
-          Add your players on the{' '}
+          Add your players in{' '}
           <button className="link-btn" onClick={props.onGoRoster}>
-            Roster tab
+            My Roster
           </button>{' '}
           and they’ll appear here automatically.
         </div>
       ) : null}
-      {(!props.emptyRoster || props.comparisons.length > 0) && (
-        <div className="table-wrap">
-          <table className="eval-table">
-            <thead>
-              <tr>
-                <th className="sticky">Player</th>
-                <th className="n" title="Games played (actual)">
-                  GP
-                </th>
-                <StatHeaders stats={stats} sort={sort} onSort={onSort} />
-              </tr>
-            </thead>
-            <tbody>{rows.map(row)}</tbody>
-          </table>
+      {showTable && (
+        <StickyHeadTable
+          tableClass="eval-table"
+          scrollClass="table-wrap"
+          head={
+            <tr>
+              <th className="sticky">Player</th>
+              <th className="n" title="Games played (actual)">
+                GP
+              </th>
+              <StatHeaders stats={stats} sort={sort} onSort={onSort} />
+            </tr>
+          }
+        >
+          <tbody>{rows.map(row)}</tbody>
+        </StickyHeadTable>
+      )}
+      {/* No key to the bold (normalized) / smaller (actual) figures: removed 2026-11-26, owner decision. */}
+      {((showTable && props.totals) || props.goalies.length > 0) && (
+        <div className="eval-foot">
+          <p className="small muted ev-legend">
+            {showTable && props.totals && <>Actual {props.seasonText} regular-season totals</>}
+            {props.goalies.length > 0 && (
+              <>
+                {showTable && props.totals && <br />}
+                Goalies aren’t evaluated yet: {props.goalies.join(', ')}.
+              </>
+            )}
+          </p>
         </div>
       )}
-      <div className="eval-foot">
-        {props.footer}
-        <p className="small muted ev-legend">
-          {props.totals ? (
-            <>Actual {props.seasonText} regular-season totals</>
-          ) : (
-            <>
-              <b className="num">{formatAdjusted(decimals === 3 ? 0.875 : 12.34, decimals)}</b> normalized to {props.benchmark.available ? `${props.benchmark.gamesPlayed} GP` : 'the benchmark'} · <span className="num">10</span> actual
-            </>
-          )}
-          {props.goalies.length > 0 && (
-            <>
-              <br />
-              Goalies aren’t evaluated yet: {props.goalies.join(', ')}.
-            </>
-          )}
-        </p>
-      </div>
     </div>
   );
 }
@@ -638,7 +648,7 @@ function ComparisonSearch(props: { skaters: readonly SkaterStatLine[]; exclude: 
     <div className="search ev-search">
       <input
         value={q}
-        placeholder="Compare an NHL skater…"
+        placeholder="Compare a player…"
         aria-label="Add a comparison player"
         onChange={(e) => {
           setQ(e.target.value);
@@ -740,14 +750,13 @@ function RankingsPanel(props: {
 
   return (
     <div className="panel">
-      <div className="panel-head">
+      <div className="panel-head no-rule">
         <h2>All NHL skaters</h2>
         {!props.totals && <SortBasisMenu value={props.sortBasis} onChange={props.onSortBasis} />}
         <StatGroupToggle group={group} onChange={setGroup} />
       </div>
       <div className="panel-body rank-controls">
         <div className="field">
-          <span className="small muted">Position</span>
           <div className="segmented" role="group" aria-label="Position">
             {POSITION_FILTERS.map((p) => (
               <button key={p.id} aria-pressed={position === p.id} onClick={() => setPosition(p.id)}>
@@ -779,18 +788,20 @@ function RankingsPanel(props: {
         <div className="empty">Choose a benchmark above to rank on {LABEL.get(stat)?.toLowerCase()}.</div>
       ) : (
         <>
-          <div className="table-wrap">
-            <table className="eval-table rank-table">
-              <thead>
-                <tr>
-                  <th className="n rk">#</th>
-                  <th className="sticky">Player</th>
-                  <th className="n" title="Games played (actual)">
-                    GP
-                  </th>
-                  <StatHeaders stats={stats} sort={{ key: stat, dir: direction }} onSort={onSort} />
-                </tr>
-              </thead>
+          <StickyHeadTable
+            tableClass="eval-table rank-table"
+            scrollClass="table-wrap"
+            head={
+              <tr>
+                <th className="n rk">#</th>
+                <th className="sticky">Player</th>
+                <th className="n" title="Games played (actual)">
+                  GP
+                </th>
+                <StatHeaders stats={stats} sort={{ key: stat, dir: direction }} onSort={onSort} />
+              </tr>
+            }
+          >
               <tbody>
                 {rows.slice(0, shown).map((r) => {
                   const line = byId.get(r.nhlId)!;
@@ -814,8 +825,7 @@ function RankingsPanel(props: {
                   );
                 })}
               </tbody>
-            </table>
-          </div>
+          </StickyHeadTable>
           {rows.length === 0 && <div className="empty">No skaters match these filters.</div>}
           {rows.length > shown && (
             <div className="rank-more">
